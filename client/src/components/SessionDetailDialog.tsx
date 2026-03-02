@@ -7,7 +7,6 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { SessionHistory } from '@/lib/storage';
@@ -90,7 +89,7 @@ export function SessionDetailDialog({ session, open, onOpenChange }: SessionDeta
 
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 bg-zinc-50/50 dark:bg-zinc-950/50">
           <div className="space-y-6">
-            {[...session.exchanges].reverse().map((exchange, idx) => (
+            {[...session.exchanges].reverse().map((exchange) => (
               <div key={exchange.id} className="font-mono text-sm">
                 <div className="flex items-start gap-3 mb-3">
                   <div className="text-[10px] text-muted-foreground mt-1 shrink-0 w-16">
