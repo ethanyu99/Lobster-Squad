@@ -36,7 +36,38 @@ function generateOpenClawConfig(apiKey: string, gatewayToken: string): Record<st
     http: {
       endpoints: {
         responses: {
-          enabled: true
+          enabled: true,
+          maxBodyBytes: 20000000,
+          maxUrlParts: 10,
+          files: {
+            allowUrl: true,
+            urlAllowlist: ["*.r2.dev"],
+            allowedMimes: [
+              "text/plain",
+              "text/markdown",
+              "text/html",
+              "text/csv",
+              "application/json",
+              "application/pdf",
+            ],
+            maxBytes: 5242880,
+            maxChars: 200000,
+            maxRedirects: 3,
+            timeoutMs: 10000,
+            pdf: {
+              maxPages: 10,
+              maxPixels: 1000000,
+              minTextChars: 200,
+            },
+          },
+          images: {
+            allowUrl: true,
+            urlAllowlist: ["*.r2.dev"],
+            allowedMimes: ["image/jpg", "image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"],
+            maxBytes: 10485760,
+            maxRedirects: 3,
+            timeoutMs: 10000,
+          },
         },
       },
     },
