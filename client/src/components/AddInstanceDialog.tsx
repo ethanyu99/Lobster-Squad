@@ -112,6 +112,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
             size="sm"
             className="flex-1 gap-1.5"
             onClick={() => setMode('sandbox')}
+            disabled={loading}
           >
             <Cloud className="h-4 w-4" />
             Novita Sandbox
@@ -121,6 +122,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
             size="sm"
             className="flex-1 gap-1.5"
             onClick={() => setMode('manual')}
+            disabled={loading}
           >
             <Server className="h-4 w-4" />
             Manual
@@ -143,6 +145,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
                 value={sandboxName}
                 onChange={e => setSandboxName(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -155,6 +158,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
                 onChange={e => setApiKey(e.target.value)}
                 required
                 autoComplete="off"
+                disabled={loading}
               />
               <p className="text-xs text-muted-foreground">
                 Get your API key at{' '}
@@ -172,6 +176,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
                 value={gatewayToken}
                 onChange={e => setGatewayToken(e.target.value)}
                 autoComplete="off"
+                disabled={loading}
               />
               <p className="text-xs text-muted-foreground">
                 Optional. A secure token will be auto-generated if left empty.
@@ -184,6 +189,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
                 placeholder="What does this instance do?"
                 value={sandboxDesc}
                 onChange={e => setSandboxDesc(e.target.value)}
+                disabled={loading}
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
@@ -201,6 +207,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
                 value={name}
                 onChange={e => setName(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -211,6 +218,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
                 value={endpoint}
                 onChange={e => setEndpoint(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -222,6 +230,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
                 value={token}
                 onChange={e => setToken(e.target.value)}
                 autoComplete="off"
+                disabled={loading}
               />
               <p className="text-xs text-muted-foreground">
                 If the instance has OPENCLAW_GATEWAY_TOKEN set, enter it here for authentication.
@@ -234,6 +243,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
                 placeholder="What does this instance do?"
                 value={description}
                 onChange={e => setDescription(e.target.value)}
+                disabled={loading}
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>

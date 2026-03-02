@@ -1,26 +1,63 @@
-import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+const STEPS = [
+  'Requesting sandbox allocation',
+  'Provisioning container',
+  'Installing OpenClaw runtime',
+  'Configuring gateway endpoint',
+  'Running health checks',
+];
+
 export function SandboxLoadingAnimation() {
-  const [dots, setDots] = useState('');
+  const [elapsed, setElapsed] = useState(0);
+  const [activeStep, setActiveStep] = useState(0);
+  const [cursor, setCursor] = useState(true);
+
+  useEffect(() => {
+    const timer = setInterval(() => setElapsed(s => s + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setDots(prev => prev.length >= 3 ? '' : prev + '.');
-    }, 500);
+      setActiveStep(prev => (prev < STEPS.length - 1 ? prev + 1 : prev));
+    }, 3500);
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => setCursor(v => !v), 530);
+    return () => clearInterval(interval);
+  }, []);
+
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+
   return (
-    <div className="flex flex-col items-center justify-center p-8 space-y-4 w-full text-muted-foreground">
-      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      <div className="text-center space-y-2">
-        <p className="font-medium text-foreground">
-          Creating sandbox instance{dots}
-        </p>
-        <p className="text-sm">
-          It will take a few minutes. Please wait.
-        </p>
+    <div className="rounded-md bg-[#1a1a2e] text-[#e0e0e0] font-mono text-xs p-3 mt-1 border border-[#2a2a4a]">
+      <div className="flex items-center justify-between mb-2 text-[#888]">
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          creating sandbox
+        </span>
+        <span>{pad(mins)}:{pad(secs)}</span>
+      </div>
+      <div className="space-y-0.5">
+        {STEPS.map((step, i) => {
+          if (i > activeStep) return null;
+          const done = i < activeStep;
+          return (
+            <div key={i} className="flex items-center gap-1.5">
+              <span className={done ? 'text-emerald-400' : 'text-yellow-400'}>
+                {done ? '✓' : '›'}
+              </span>
+              <span className={done ? 'text-[#888]' : 'text-[#e0e0e0]'}>
+                {step}{!done && (cursor ? '█' : ' ')}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
