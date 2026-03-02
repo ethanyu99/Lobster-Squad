@@ -35,7 +35,9 @@ function generateOpenClawConfig(apiKey: string, gatewayToken: string): Record<st
     auth: { mode: 'token', token: gatewayToken },
     http: {
       endpoints: {
-        responses: { enabled: true },
+        responses: {
+          enabled: true
+        },
       },
     },
     controlUi: {

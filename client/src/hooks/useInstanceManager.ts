@@ -208,7 +208,7 @@ export function useInstanceManager() {
     };
   }, [connect, loadInstances]);
 
-  const dispatchTask = useCallback((instanceId: string, content: string, instanceName: string, newSession?: boolean) => {
+  const dispatchTask = useCallback((instanceId: string, content: string, instanceName: string, newSession?: boolean, imageUrls?: string[]) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
     const taskId = self.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
@@ -216,12 +216,15 @@ export function useInstanceManager() {
 
     taskContentRef.current[taskId] = '';
 
-    // Store pending exchange — will be committed when server replies with sessionKey
-    pendingExchangesRef.current[taskId] = { instanceId, instanceName, content, timestamp: now };
+    const displayContent = imageUrls?.length
+      ? `${content}${content ? '\n' : ''}[${imageUrls.length} image(s) attached]`
+      : content;
+
+    pendingExchangesRef.current[taskId] = { instanceId, instanceName, content: displayContent, timestamp: now };
 
     wsRef.current.send(JSON.stringify({
       type: 'task:dispatch',
-      payload: { instanceId, content, taskId, newSession },
+      payload: { instanceId, content, taskId, newSession, imageUrls },
       timestamp: now,
     }));
   }, []);

@@ -1,10 +1,16 @@
+import dotenv from 'dotenv';
+import path from 'path';
+
+dotenv.config({ path: path.resolve(process.cwd(), '../.env') });
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
-import path from 'path';
 import { WebSocketServer } from 'ws';
 import { instanceRouter } from './routes/instances';
 import { taskRouter } from './routes/tasks';
+import { uploadRouter } from './routes/upload';
 import { setupWebSocket } from './ws';
 
 const app = express();
@@ -17,6 +23,11 @@ app.use(express.json());
 // API routes
 app.use('/api/instances', instanceRouter);
 app.use('/api/tasks', taskRouter);
+app.use('/api/upload', uploadRouter);
+
+// Serve locally uploaded files
+const uploadsDir = path.join(process.cwd(), 'uploads');
+app.use('/api/uploads', express.static(uploadsDir));
 
 // Health check
 app.get('/api/health', (_req, res) => {

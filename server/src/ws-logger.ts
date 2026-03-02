@@ -16,7 +16,7 @@ function getLogFilePath(): string {
   return path.join(LOG_DIR, `ws-${date}.log`);
 }
 
-function truncate(str: string, maxLen = 500): string {
+function truncate(str: string, maxLen = 2000): string {
   return str.length > maxLen ? str.slice(0, maxLen) + '...' : str;
 }
 
@@ -58,7 +58,7 @@ export function createLogEntry(
       event = parsed.event;
       summary = `${parsed.event}: ${truncate(JSON.stringify(parsed.payload || {}), 150)}`;
     } else {
-      summary = truncate(JSON.stringify(parsed), 200);
+      summary = truncate(JSON.stringify(parsed), 1000);
     }
   } catch {
     // raw is not valid JSON

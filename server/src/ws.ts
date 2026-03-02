@@ -31,7 +31,7 @@ function toHttpBase(endpoint: string | undefined): string {
  * Uses `POST /v1/responses` with SSE streaming.
  * Docs: https://docs.openclaw.ai/gateway/openresponses-http-api
  */
-async function dispatchToInstance(instanceId: string, taskId: string, content: string, _newSession?: boolean) {
+async function dispatchToInstance(instanceId: string, taskId: string, content: string, _newSession?: boolean, imageUrls?: string[]) {
   const instance = store.getInstanceRaw(instanceId);
   if (!instance || !instance.endpoint) return;
 
@@ -68,9 +68,26 @@ async function dispatchToInstance(instanceId: string, taskId: string, content: s
     headers['Authorization'] = `Bearer ${instance.token}`;
   }
 
+  let input: string | Array<Record<string, unknown>>;
+  if (imageUrls?.length) {
+    const contentParts: Array<Record<string, unknown>> = [];
+    if (content) {
+      contentParts.push({ type: 'input_text', text: content });
+    }
+    for (const imgUrl of imageUrls) {
+      contentParts.push({
+        type: 'input_image',
+        source: { type: 'url', url: imgUrl },
+      });
+    }
+    input = [{ type: 'message', role: 'user', content: contentParts }];
+  } else {
+    input = content;
+  }
+
   const body = JSON.stringify({
     model: 'openclaw',
-    input: content,
+    input,
     stream: true,
     user: sessionUser,
   });
@@ -289,14 +306,18 @@ export function setupWebSocket(wss: WebSocketServer) {
         const msg: WSMessage = JSON.parse(data.toString());
 
         if (msg.type === 'task:dispatch') {
-          const { instanceId, content, taskId: clientTaskId, newSession } = msg.payload as TaskDispatchPayload;
+          const { instanceId, content, taskId: clientTaskId, newSession, imageUrls } = msg.payload as TaskDispatchPayload;
 
           if (newSession) {
             store.resetSessionKey(instanceId);
           }
           const sessionKey = store.getSessionKey(instanceId);
 
-          const task = store.createTask(instanceId, content, clientTaskId || msg.taskId || undefined);
+          const displayContent = imageUrls?.length
+            ? `${content}${content ? '\n' : ''}[${imageUrls.length} image(s) attached]`
+            : content;
+
+          const task = store.createTask(instanceId, displayContent, clientTaskId || msg.taskId || undefined);
 
           broadcast({
             type: 'task:status',
@@ -307,7 +328,7 @@ export function setupWebSocket(wss: WebSocketServer) {
             timestamp: new Date().toISOString(),
           });
 
-          dispatchToInstance(instanceId, task.id, content, false);
+          dispatchToInstance(instanceId, task.id, content, false, imageUrls);
         }
       } catch {
         // ignore parse errors

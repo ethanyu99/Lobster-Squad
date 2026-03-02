@@ -64,6 +64,7 @@ export interface TaskDispatchPayload {
   content: string;
   taskId?: string;
   newSession?: boolean;
+  imageUrls?: string[];
 }
 
 export interface TaskStreamPayload {

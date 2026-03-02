@@ -12,7 +12,8 @@
                         "name": "Claude Opus 4.6",
                         "reasoning": true,
                         "input": [
-                            "text"
+                            "text",
+                            "image"
                         ],
                         "cost": {
                             "input": 0,
@@ -25,10 +26,11 @@
                     },
                     {
                         "id": "pa/claude-sonnet-4-6",
-                        "name": "Claude Opus 4.6",
+                        "name": "Claude Sonnet 4.6",
                         "reasoning": true,
                         "input": [
-                            "text"
+                            "text",
+                            "image"
                         ],
                         "cost": {
                             "input": 0,

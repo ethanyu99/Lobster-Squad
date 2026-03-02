@@ -70,6 +70,23 @@ export async function fetchTasks(instanceId?: string): Promise<TaskSummary[]> {
   return res.json();
 }
 
+export async function uploadFiles(files: File[]): Promise<{ url: string; key: string }[]> {
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append('files', file);
+  }
+  const res = await fetch(`${API_BASE}/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Upload failed' }));
+    throw new Error(body.error || 'Upload failed');
+  }
+  const data = await res.json();
+  return data.files;
+}
+
 export function createWebSocket(onMessage: (msg: WSMessage) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);

@@ -1,13 +1,19 @@
-import { useState, useRef, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Send, X, RotateCcw, Layers } from 'lucide-react';
+import { Send, X, RotateCcw, Layers, ImagePlus, Loader2 } from 'lucide-react';
 import type { InstancePublic } from '@shared/types';
+import { uploadFiles } from '@/lib/api';
 
 interface TaskInputProps {
   instances: InstancePublic[];
-  onDispatch: (instanceId: string, content: string, instanceName: string, newSession?: boolean) => void;
+  onDispatch: (instanceId: string, content: string, instanceName: string, newSession?: boolean, imageUrls?: string[]) => void;
+}
+
+interface PastedImage {
+  id: string;
+  file: File;
+  preview: string;
 }
 
 const ALL_OPTION_ID = '__all__';
@@ -29,7 +35,9 @@ export function TaskInput({ instances, onDispatch }: TaskInputProps) {
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const [pendingNewSession, setPendingNewSession] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [images, setImages] = useState<PastedImage[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (!value.startsWith('@')) {
@@ -56,6 +64,14 @@ export function TaskInput({ instances, onDispatch }: TaskInputProps) {
     setHighlightIndex(0);
   }, [value, instances, targetInstances]);
 
+  // Auto-resize textarea
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+  }, [value]);
+
   const selectSuggestion = (item: SuggestionItem) => {
     if (isAllOption(item)) {
       setTargetInstances([...instances]);
@@ -67,7 +83,7 @@ export function TaskInput({ instances, onDispatch }: TaskInputProps) {
     }
     setValue('');
     setSuggestions([]);
-    inputRef.current?.focus();
+    textareaRef.current?.focus();
   };
 
   const removeTarget = (id: string) => {
@@ -78,24 +94,92 @@ export function TaskInput({ instances, onDispatch }: TaskInputProps) {
     setTargetInstances([]);
     setValue('');
     setPendingNewSession(false);
-    inputRef.current?.focus();
+    setImages([]);
+    textareaRef.current?.focus();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const addImages = useCallback((files: File[]) => {
+    const newImages = files
+      .filter(f => f.type.startsWith('image/'))
+      .map(file => ({
+        id: crypto.randomUUID(),
+        file,
+        preview: URL.createObjectURL(file),
+      }));
+    if (newImages.length) {
+      setImages(prev => [...prev, ...newImages]);
+    }
+  }, []);
+
+  const removeImage = useCallback((id: string) => {
+    setImages(prev => {
+      const img = prev.find(i => i.id === id);
+      if (img) URL.revokeObjectURL(img.preview);
+      return prev.filter(i => i.id !== id);
+    });
+  }, []);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData.items);
+    const imageItems = items.filter(item => item.type.startsWith('image/'));
+
+    if (imageItems.length > 0) {
+      e.preventDefault();
+      const files = imageItems
+        .map(item => item.getAsFile())
+        .filter((f): f is File => f !== null);
+      addImages(files);
+    }
+  }, [addImages]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
+    const files = Array.from(e.dataTransfer.files).filter(f =>
+      f.type.startsWith('image/')
+    );
+    addImages(files);
+  }, [addImages]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
+
+  const handleSubmit = async () => {
+    if (uploading) return;
     if (targetInstances.length === 0) return;
 
     const content = value.trim();
-    if (!content) return;
+    if (!content && images.length === 0) return;
+
+    let imageUrls: string[] | undefined;
+
+    if (images.length > 0) {
+      setUploading(true);
+      try {
+        const results = await uploadFiles(images.map(img => img.file));
+        imageUrls = results.map(r => r.url);
+      } catch {
+        setUploading(false);
+        return;
+      }
+      setUploading(false);
+    }
 
     for (const inst of targetInstances) {
-      onDispatch(inst.id, content, inst.name, pendingNewSession || undefined);
+      onDispatch(inst.id, content, inst.name, pendingNewSession || undefined, imageUrls);
     }
+
+    // Cleanup previews
+    for (const img of images) {
+      URL.revokeObjectURL(img.preview);
+    }
+
     setValue('');
+    setImages([]);
     setPendingNewSession(false);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (suggestions.length > 0) {
       switch (e.key) {
         case 'Tab':
@@ -124,6 +208,13 @@ export function TaskInput({ instances, onDispatch }: TaskInputProps) {
       }
     }
 
+    // Enter = submit, Shift+Enter = newline
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+      return;
+    }
+
     if (e.key === 'Backspace' && !value && targetInstances.length > 0) {
       removeTarget(targetInstances[targetInstances.length - 1].id);
     }
@@ -131,16 +222,28 @@ export function TaskInput({ instances, onDispatch }: TaskInputProps) {
 
   const handleNewSession = () => {
     setPendingNewSession(prev => !prev);
-    inputRef.current?.focus();
+    textareaRef.current?.focus();
+  };
+
+  const handleFileSelect = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.multiple = true;
+    input.onchange = () => {
+      if (input.files) addImages(Array.from(input.files));
+    };
+    input.click();
   };
 
   const isAllSelected =
     targetInstances.length === instances.length && instances.length > 1;
 
   const isSubmitDisabled =
+    uploading ||
     suggestions.length > 0 ||
     targetInstances.length === 0 ||
-    !value.trim();
+    (!value.trim() && images.length === 0);
 
   return (
     <div className="border-t border-border/60 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60 px-6 py-4 space-y-2 shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.05)] z-10 relative">
@@ -186,17 +289,39 @@ export function TaskInput({ instances, onDispatch }: TaskInputProps) {
               )}
             </button>
           ))}
-          {suggestions.length === 0 && (
-            <div className="px-3 py-3 text-xs text-muted-foreground text-center">
-              No matching instances
-            </div>
-          )}
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="flex items-center gap-3 bg-background border border-border/80 rounded-xl px-2 py-1.5 shadow-sm focus-within:ring-2 focus-within:ring-ring/20 focus-within:border-ring/50 transition-all">
+      <div
+        className="flex flex-col bg-background border border-border/80 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-ring/20 focus-within:border-ring/50 transition-all overflow-hidden"
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+      >
+        {/* Image previews */}
+        {images.length > 0 && (
+          <div className="flex items-center gap-2 px-3 pt-3 pb-1 flex-wrap">
+            {images.map(img => (
+              <div key={img.id} className="relative group">
+                <img
+                  src={img.preview}
+                  alt="preview"
+                  className="w-16 h-16 object-cover rounded-lg border border-border/60 shadow-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeImage(img.id)}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Target badges row */}
         {targetInstances.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap shrink-0 pl-1">
+          <div className="flex items-center gap-1.5 flex-wrap px-3 pt-2.5 pb-0.5">
             {isAllSelected ? (
               <Badge variant="default" className="gap-1 text-xs font-medium bg-primary/90 hover:bg-primary">
                 @all ({instances.length})
@@ -233,27 +358,61 @@ export function TaskInput({ instances, onDispatch }: TaskInputProps) {
               <RotateCcw className="h-3 w-3" />
               {pendingNewSession ? 'New Chat ✓' : 'New Chat'}
             </Button>
-            <div className="w-px h-4 bg-border/80 mx-1"></div>
           </div>
         )}
-        <Input
-          ref={inputRef}
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            targetInstances.length > 0
-              ? pendingNewSession
-                ? `New session — send message to ${targetInstances.length} instance(s)...`
-                : `Send task to ${targetInstances.length} instance(s)... (type @ to add more)`
-              : 'Type @ to select instance(s)...'
-          }
-          className="flex-1 border-0 shadow-none focus-visible:ring-0 px-2 h-9 bg-transparent"
-        />
-        <Button type="submit" size="icon" disabled={isSubmitDisabled} className="h-8 w-8 rounded-lg shrink-0 transition-all">
-          <Send className="h-4 w-4" />
-        </Button>
-      </form>
+
+        {/* Input row */}
+        <div className="flex items-end gap-2 px-2 py-1.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-lg shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={handleFileSelect}
+            title="Attach image"
+          >
+            <ImagePlus className="h-4 w-4" />
+          </Button>
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={
+              targetInstances.length > 0
+                ? pendingNewSession
+                  ? `New session — send message to ${targetInstances.length} instance(s)...`
+                  : `Send task to ${targetInstances.length} instance(s)... (type @ to add more)`
+                : 'Type @ to select instance(s)...'
+            }
+            rows={1}
+            className="flex-1 resize-none border-0 bg-transparent px-2 py-2 text-sm leading-5 placeholder:text-muted-foreground focus:outline-none min-h-[36px] max-h-[200px] scrollbar-thin"
+          />
+          <Button
+            type="button"
+            size="icon"
+            disabled={isSubmitDisabled}
+            onClick={handleSubmit}
+            className="h-8 w-8 rounded-lg shrink-0 transition-all mb-0.5"
+          >
+            {uploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+
+        {/* Hint */}
+        {value.includes('\n') && (
+          <div className="px-4 pb-1.5 -mt-1">
+            <span className="text-[10px] text-muted-foreground/60">
+              Enter to send · Shift+Enter for new line
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
