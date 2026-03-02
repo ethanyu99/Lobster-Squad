@@ -14,7 +14,7 @@ export interface Instance {
   updatedAt: string;
 }
 
-export type InstancePublic = Omit<Instance, 'token' | 'apiKey'> & { hasToken: boolean };
+export type InstancePublic = Omit<Instance, 'apiKey'> & { hasToken: boolean };
 
 export interface TaskSummary {
   id: string;

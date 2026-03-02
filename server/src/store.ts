@@ -16,8 +16,8 @@ function persist() {
 }
 
 function toPublic(inst: Instance): InstancePublic {
-  const { token, apiKey, ...rest } = inst;
-  return { ...rest, hasToken: !!token };
+  const { apiKey, ...rest } = inst;
+  return { ...rest, hasToken: !!inst.token };
 }
 
 export const store = {

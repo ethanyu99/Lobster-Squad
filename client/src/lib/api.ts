@@ -14,7 +14,10 @@ export async function createInstance(data: { name: string; endpoint: string; des
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Failed to create instance');
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Failed to create instance' }));
+    throw new Error(body.error || 'Failed to create instance');
+  }
   return res.json();
 }
 
@@ -24,7 +27,10 @@ export async function updateInstance(id: string, data: { name?: string; endpoint
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Failed to update instance');
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Failed to update instance' }));
+    throw new Error(body.error || 'Failed to update instance');
+  }
   return res.json();
 }
 

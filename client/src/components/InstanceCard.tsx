@@ -1,10 +1,14 @@
 import { useState, useMemo } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Trash2, RefreshCw, Cloud } from 'lucide-react';
+import { Trash2, RefreshCw, Cloud, Edit2, ExternalLink } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import type { InstancePublic } from '@shared/types';
-import { deleteInstance, checkHealth } from '@/lib/api';
+import { deleteInstance, checkHealth, updateInstance } from '@/lib/api';
 import { getExchangeById } from '@/lib/storage';
 import { SessionDetailDialog } from '@/components/SessionDetailDialog';
 
@@ -28,8 +32,34 @@ const statusBadgeVariant: Record<string, 'default' | 'secondary' | 'destructive'
 
 export function InstanceCard({ instance, taskStream, onRefresh }: InstanceCardProps) {
   const [detailOpen, setDetailOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState(instance.name);
+  const [editDesc, setEditDesc] = useState(instance.description || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const [deleting, setDeleting] = useState(false);
+
+  const handleEditSave = async () => {
+    if (!editName.trim()) {
+      setError('Name is required');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await updateInstance(instance.id, {
+        name: editName.trim(),
+        description: editDesc.trim(),
+      });
+      setEditOpen(false);
+      onRefresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -68,7 +98,7 @@ export function InstanceCard({ instance, taskStream, onRefresh }: InstanceCardPr
   return (
     <>
       <Card className="hover:border-primary/40 hover:shadow-md transition-all duration-200 bg-card border-border/80 shadow-sm">
-        <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
+        <CardHeader className="pb-3 border-b border-border/40 bg-muted/20 overflow-hidden">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <span className={`inline-block w-2.5 h-2.5 rounded-full shadow-sm ${statusColor[instance.status]}`} />
@@ -87,14 +117,41 @@ export function InstanceCard({ instance, taskStream, onRefresh }: InstanceCardPr
               <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-muted" onClick={handleHealth}>
                 <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 hover:bg-muted"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditName(instance.name);
+                  setEditDesc(instance.description || '');
+                  setError('');
+                  setEditOpen(true);
+                }}
+              >
+                <Edit2 className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
               <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-destructive/10 hover:text-destructive text-muted-foreground" onClick={handleDelete} disabled={deleting}>
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
-          <CardDescription className="font-mono text-xs truncate mt-1.5 text-muted-foreground/80 bg-muted/50 px-2 py-1 rounded-md border border-border/50 inline-block w-fit max-w-full">
-            {instance.endpoint}
-          </CardDescription>
+          <div className="flex flex-col gap-1.5 mt-2.5 min-w-0">
+            <div className="font-mono text-xs text-muted-foreground/80 bg-muted/50 px-2 py-1.5 rounded-md border border-border/50 min-w-0 overflow-hidden flex items-center">
+              <a href={instance.endpoint?.replace(/^ws/, 'http') || '#'} target="_blank" rel="noreferrer" className="hover:text-primary hover:underline flex items-center gap-1.5 min-w-0 w-full">
+                <span className="truncate">{instance.endpoint || 'No endpoint'}</span>
+                <ExternalLink className="h-3 w-3 shrink-0" />
+              </a>
+            </div>
+            {instance.sandboxId && instance.token && (
+              <div className="font-mono text-xs text-blue-600/80 bg-blue-50/50 px-2 py-1.5 rounded-md border border-blue-200/50 min-w-0 overflow-hidden flex items-center">
+                <a href={`${instance.endpoint?.replace(/^ws/, 'http') || ''}?token=${instance.token}`} target="_blank" rel="noreferrer" className="hover:text-blue-600 hover:underline flex items-center gap-1.5 min-w-0 w-full">
+                  <span className="truncate">Console: {instance.endpoint}?token={instance.token.substring(0, 8)}...</span>
+                  <ExternalLink className="h-3 w-3 shrink-0" />
+                </a>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="pt-4">
           {instance.description && (
@@ -148,6 +205,44 @@ export function InstanceCard({ instance, taskStream, onRefresh }: InstanceCardPr
         open={detailOpen}
         onOpenChange={setDetailOpen}
       />
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Instance</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Instance Name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={editDesc}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditDesc(e.target.value)}
+                placeholder="Optional description"
+                rows={3}
+              />
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditSave} disabled={saving}>
+              {saving ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

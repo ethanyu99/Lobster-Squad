@@ -21,6 +21,10 @@ instanceRouter.post('/', (req, res) => {
   if (!name || !endpoint) {
     return res.status(400).json({ error: 'name and endpoint are required' });
   }
+  const existing = store.getInstances().find(i => i.name === name);
+  if (existing) {
+    return res.status(400).json({ error: 'Instance name must be unique' });
+  }
   const instance = store.createInstance({
     name,
     endpoint,
@@ -32,7 +36,20 @@ instanceRouter.post('/', (req, res) => {
 
 instanceRouter.put('/:id', (req, res) => {
   const { name, endpoint, description, token } = req.body;
-  const instance = store.updateInstance(req.params.id, { name, endpoint, description, token });
+  if (name) {
+    const existing = store.getInstances().find(i => i.name === name && i.id !== req.params.id);
+    if (existing) {
+      return res.status(400).json({ error: 'Instance name must be unique' });
+    }
+  }
+  
+  const updateData: any = {};
+  if (name !== undefined) updateData.name = name;
+  if (endpoint !== undefined) updateData.endpoint = endpoint;
+  if (description !== undefined) updateData.description = description;
+  if (token !== undefined) updateData.token = token;
+
+  const instance = store.updateInstance(req.params.id, updateData);
   if (!instance) return res.status(404).json({ error: 'Instance not found' });
   res.json(instance);
 });
@@ -57,6 +74,11 @@ instanceRouter.post('/sandbox', async (req, res) => {
   const { name, apiKey, gatewayToken, description } = req.body;
   if (!name || !apiKey) {
     return res.status(400).json({ error: 'name and apiKey are required' });
+  }
+
+  const existing = store.getInstances().find(i => i.name === name);
+  if (existing) {
+    return res.status(400).json({ error: 'Instance name must be unique' });
   }
 
   try {
