@@ -18,7 +18,8 @@ function broadcast(message: WSMessage) {
  * Normalize endpoint to an HTTP base URL.
  * Accepts ws://, wss://, http://, https:// — always returns http(s)://
  */
-function toHttpBase(endpoint: string): string {
+function toHttpBase(endpoint: string | undefined): string {
+  if (!endpoint) return '';
   return endpoint
     .replace(/^ws:\/\//, 'http://')
     .replace(/^wss:\/\//, 'https://')
@@ -32,7 +33,7 @@ function toHttpBase(endpoint: string): string {
  */
 async function dispatchToInstance(instanceId: string, taskId: string, content: string, _newSession?: boolean) {
   const instance = store.getInstanceRaw(instanceId);
-  if (!instance) return;
+  if (!instance || !instance.endpoint) return;
 
   const sessionUser = store.getSessionKey(instanceId);
 
@@ -324,6 +325,7 @@ export function setupWebSocket(wss: WebSocketServer) {
     for (const instance of instances) {
       try {
         const raw = store.getInstanceRaw(instance.id);
+        if (!instance.endpoint) continue;
         const baseUrl = toHttpBase(instance.endpoint);
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 5000);

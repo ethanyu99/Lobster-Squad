@@ -57,6 +57,7 @@ export function addExchangeToSession(
   const now = new Date().toISOString();
 
   if (idx >= 0) {
+    if (sessions[idx].exchanges.some(e => e.id === exchange.id)) return;
     sessions[idx].exchanges.push(exchange);
     sessions[idx].updatedAt = now;
     // Move to front

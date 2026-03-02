@@ -99,7 +99,8 @@ instanceRouter.post('/sandbox', async (req, res) => {
   }
 });
 
-function toHttpBase(endpoint: string): string {
+function toHttpBase(endpoint: string | undefined): string {
+  if (!endpoint) return '';
   return endpoint
     .replace(/^ws:\/\//, 'http://')
     .replace(/^wss:\/\//, 'https://')
@@ -109,6 +110,10 @@ function toHttpBase(endpoint: string): string {
 instanceRouter.post('/:id/health', async (req, res) => {
   const instance = store.getInstanceRaw(req.params.id);
   if (!instance) return res.status(404).json({ error: 'Instance not found' });
+  if (!instance.endpoint) {
+    store.updateInstance(instance.id, { status: 'offline' });
+    return res.json({ status: 'offline', error: 'No endpoint configured' });
+  }
 
   const baseUrl = toHttpBase(instance.endpoint);
   try {

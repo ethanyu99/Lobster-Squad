@@ -71,13 +71,12 @@ export function useInstanceManager() {
             };
             addExchangeToSession(msg.sessionKey, pending.instanceId, pending.instanceName, exchange);
             delete pendingExchangesRef.current[serverTaskId];
-          } else if (msg.payload?.content) {
-            // Server-created task (e.g., after reconnect)
+          } else if (msg.payload?.content && msg.payload.status === 'pending') {
             const inst = instancesRef.current.find(i => i.id === msg.instanceId);
             const exchange: SessionExchange = {
               id: serverTaskId,
               input: msg.payload.content,
-              status: msg.payload.status || 'pending',
+              status: msg.payload.status,
               timestamp: msg.payload.createdAt || new Date().toISOString(),
             };
             addExchangeToSession(msg.sessionKey, msg.instanceId!, inst?.name || msg.instanceId!, exchange);

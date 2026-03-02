@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Plus, Cloud, Server } from 'lucide-react';
 import { createInstance, createSandboxInstance } from '@/lib/api';
+import { SandboxLoadingAnimation } from './SandboxLoadingAnimation';
 
 interface AddInstanceDialogProps {
   onCreated: () => void;
@@ -188,11 +189,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Creating Sandbox...' : 'Create Sandbox Instance'}
             </Button>
-            {loading && (
-              <p className="text-xs text-muted-foreground text-center">
-                Creating sandbox, writing config, and starting gateway. This may take a few minutes...
-              </p>
-            )}
+            {loading && <SandboxLoadingAnimation />}
           </form>
         ) : (
           <form onSubmit={handleManualSubmit} className="space-y-4">
