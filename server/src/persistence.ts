@@ -24,6 +24,9 @@ export function loadInstances(): Map<string, Instance> {
       const raw = fs.readFileSync(INSTANCES_FILE, 'utf-8');
       const data: PersistedData = JSON.parse(raw);
       for (const inst of data.instances) {
+        if (!inst.ownerId) {
+          inst.ownerId = 'legacy';
+        }
         map.set(inst.id, inst);
       }
     }

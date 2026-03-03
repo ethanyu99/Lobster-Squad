@@ -12,6 +12,7 @@ import { instanceRouter } from './routes/instances';
 import { taskRouter } from './routes/tasks';
 import { uploadRouter } from './routes/upload';
 import { setupWebSocket } from './ws';
+import { authMiddleware } from './auth';
 
 const app = express();
 const server = http.createServer(app);
@@ -20,9 +21,9 @@ const PORT = parseInt(process.env.PORT || '3002', 10);
 app.use(cors());
 app.use(express.json());
 
-// API routes
-app.use('/api/instances', instanceRouter);
-app.use('/api/tasks', taskRouter);
+// Auth middleware for all API routes
+app.use('/api/instances', authMiddleware, instanceRouter);
+app.use('/api/tasks', authMiddleware, taskRouter);
 app.use('/api/upload', uploadRouter);
 
 // Serve locally uploaded files

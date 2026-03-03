@@ -4,28 +4,30 @@ import { createSandbox, killSandbox } from '../sandbox';
 
 export const instanceRouter = Router();
 
-instanceRouter.get('/', (_req, res) => {
-  const instances = store.getInstances();
-  const stats = store.getStats();
+instanceRouter.get('/', (req, res) => {
+  const ownerId = req.userContext!.userId;
+  const instances = store.getInstances(ownerId);
+  const stats = store.getStats(ownerId);
   res.json({ instances, stats });
 });
 
 instanceRouter.get('/:id', (req, res) => {
-  const instance = store.getInstance(req.params.id);
+  const ownerId = req.userContext!.userId;
+  const instance = store.getInstance(ownerId, req.params.id);
   if (!instance) return res.status(404).json({ error: 'Instance not found' });
   res.json(instance);
 });
 
 instanceRouter.post('/', (req, res) => {
+  const ownerId = req.userContext!.userId;
   const { name, endpoint, description, token } = req.body;
   if (!name || !endpoint) {
     return res.status(400).json({ error: 'name and endpoint are required' });
   }
-  const existing = store.getInstances().find(i => i.name === name);
-  if (existing) {
+  if (store.isNameTaken(ownerId, name)) {
     return res.status(400).json({ error: 'Instance name must be unique' });
   }
-  const instance = store.createInstance({
+  const instance = store.createInstance(ownerId, {
     name,
     endpoint,
     description: description || '',
@@ -35,12 +37,15 @@ instanceRouter.post('/', (req, res) => {
 });
 
 instanceRouter.put('/:id', (req, res) => {
+  const ownerId = req.userContext!.userId;
   const { name, endpoint, description, token } = req.body;
-  if (name) {
-    const existing = store.getInstances().find(i => i.name === name && i.id !== req.params.id);
-    if (existing) {
-      return res.status(400).json({ error: 'Instance name must be unique' });
-    }
+
+  if (!store.getInstance(ownerId, req.params.id)) {
+    return res.status(404).json({ error: 'Instance not found' });
+  }
+
+  if (name && store.isNameTaken(ownerId, name, req.params.id)) {
+    return res.status(400).json({ error: 'Instance name must be unique' });
   }
   
   const updateData: any = {};
@@ -55,7 +60,8 @@ instanceRouter.put('/:id', (req, res) => {
 });
 
 instanceRouter.delete('/:id', async (req, res) => {
-  const instance = store.getInstanceRaw(req.params.id);
+  const ownerId = req.userContext!.userId;
+  const instance = store.getInstanceRawForOwner(ownerId, req.params.id);
   if (!instance) return res.status(404).json({ error: 'Instance not found' });
 
   if (instance.sandboxId) {
@@ -71,13 +77,13 @@ instanceRouter.delete('/:id', async (req, res) => {
 });
 
 instanceRouter.post('/sandbox', async (req, res) => {
+  const ownerId = req.userContext!.userId;
   const { name, apiKey, gatewayToken, description } = req.body;
   if (!name || !apiKey) {
     return res.status(400).json({ error: 'name and apiKey are required' });
   }
 
-  const existing = store.getInstances().find(i => i.name === name);
-  if (existing) {
+  if (store.isNameTaken(ownerId, name)) {
     return res.status(400).json({ error: 'Instance name must be unique' });
   }
 
@@ -90,7 +96,7 @@ instanceRouter.post('/sandbox', async (req, res) => {
     const result = await createSandbox(apiKey, gatewayToken || undefined, (progress) => {
       res.write(`data: ${JSON.stringify({ type: 'progress', step: progress.step, message: progress.message, detail: progress.detail })}\n\n`);
     });
-    const instance = store.createInstance({
+    const instance = store.createInstance(ownerId, {
       name,
       endpoint: result.endpoint,
       description: description || '',
@@ -117,7 +123,8 @@ function toHttpBase(endpoint: string | undefined): string {
 }
 
 instanceRouter.post('/:id/health', async (req, res) => {
-  const instance = store.getInstanceRaw(req.params.id);
+  const ownerId = req.userContext!.userId;
+  const instance = store.getInstanceRawForOwner(ownerId, req.params.id);
   if (!instance) return res.status(404).json({ error: 'Instance not found' });
   if (!instance.endpoint) {
     store.updateInstance(instance.id, { status: 'offline' });

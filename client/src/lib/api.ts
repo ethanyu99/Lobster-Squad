@@ -1,9 +1,20 @@
 import type { InstancePublic, TaskSummary, WSMessage, InstanceStats, SandboxProgress, SandboxSSEEvent } from '@shared/types';
+import { getUserId } from './user';
 
 const API_BASE = '/api';
 
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    'X-User-Id': getUserId(),
+    ...extra,
+  };
+}
+
 export async function fetchInstances(): Promise<{ instances: InstancePublic[]; stats: InstanceStats }> {
-  const res = await fetch(`${API_BASE}/instances`);
+  const res = await fetch(`${API_BASE}/instances`, {
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error('Failed to fetch instances');
   return res.json();
 }
@@ -11,7 +22,7 @@ export async function fetchInstances(): Promise<{ instances: InstancePublic[]; s
 export async function createInstance(data: { name: string; endpoint: string; description: string; token?: string }): Promise<InstancePublic> {
   const res = await fetch(`${API_BASE}/instances`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify(data),
   });
   if (!res.ok) {
@@ -24,7 +35,7 @@ export async function createInstance(data: { name: string; endpoint: string; des
 export async function updateInstance(id: string, data: { name?: string; endpoint?: string; description?: string; token?: string }): Promise<InstancePublic> {
   const res = await fetch(`${API_BASE}/instances/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify(data),
   });
   if (!res.ok) {
@@ -35,7 +46,10 @@ export async function updateInstance(id: string, data: { name?: string; endpoint
 }
 
 export async function deleteInstance(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/instances/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}/instances/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error('Failed to delete instance');
 }
 
@@ -50,7 +64,7 @@ export async function createSandboxInstance(
 ): Promise<InstancePublic> {
   const res = await fetch(`${API_BASE}/instances/sandbox`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify(data),
   });
 
@@ -99,14 +113,19 @@ export async function createSandboxInstance(
 }
 
 export async function checkHealth(id: string): Promise<{ status: string }> {
-  const res = await fetch(`${API_BASE}/instances/${id}/health`, { method: 'POST' });
+  const res = await fetch(`${API_BASE}/instances/${id}/health`, {
+    method: 'POST',
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error('Failed to check health');
   return res.json();
 }
 
 export async function fetchTasks(instanceId?: string): Promise<TaskSummary[]> {
   const url = instanceId ? `${API_BASE}/tasks?instanceId=${instanceId}` : `${API_BASE}/tasks`;
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error('Failed to fetch tasks');
   return res.json();
 }
@@ -118,6 +137,7 @@ export async function uploadFiles(files: File[]): Promise<{ url: string; key: st
   }
   const res = await fetch(`${API_BASE}/upload`, {
     method: 'POST',
+    headers: { 'X-User-Id': getUserId() },
     body: formData,
   });
   if (!res.ok) {
@@ -130,7 +150,8 @@ export async function uploadFiles(files: File[]): Promise<{ url: string; key: st
 
 export function createWebSocket(onMessage: (msg: WSMessage) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+  const userId = getUserId();
+  const ws = new WebSocket(`${protocol}//${window.location.host}/ws?userId=${encodeURIComponent(userId)}`);
 
   ws.onmessage = (event) => {
     try {

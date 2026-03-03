@@ -3,16 +3,16 @@ import { store } from '../store';
 
 export const taskRouter = Router();
 
-// GET tasks (optionally filter by instanceId)
 taskRouter.get('/', (req, res) => {
+  const ownerId = req.userContext!.userId;
   const instanceId = req.query.instanceId as string | undefined;
-  const tasks = store.getTasks(instanceId);
+  const tasks = store.getTasks(ownerId, instanceId);
   res.json(tasks);
 });
 
-// GET single task
 taskRouter.get('/:id', (req, res) => {
+  const ownerId = req.userContext!.userId;
   const task = store.getTask(req.params.id);
-  if (!task) return res.status(404).json({ error: 'Task not found' });
+  if (!task || task.ownerId !== ownerId) return res.status(404).json({ error: 'Task not found' });
   res.json(task);
 });

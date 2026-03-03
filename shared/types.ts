@@ -2,6 +2,7 @@
 
 export interface Instance {
   id: string;
+  ownerId: string;
   name: string;
   endpoint: string;
   token?: string;
@@ -18,6 +19,7 @@ export type InstancePublic = Omit<Instance, 'apiKey'> & { hasToken: boolean };
 
 export interface TaskSummary {
   id: string;
+  ownerId: string;
   instanceId: string;
   content: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
