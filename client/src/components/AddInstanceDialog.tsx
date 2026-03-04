@@ -135,7 +135,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add OpenClaw Instance</DialogTitle>
+          <DialogTitle>Add Squad Member</DialogTitle>
         </DialogHeader>
 
         <div className="flex gap-2 mb-4">

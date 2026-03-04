@@ -39,7 +39,7 @@ export default function App() {
                     <span className="text-2xl">⚡️</span>
                   </div>
                   <p className="text-xl font-semibold mb-2 text-foreground/80">No instances configured</p>
-                  <p className="text-sm">Add an OpenClaw instance to get started</p>
+                  <p className="text-sm">Add an instance to get your Lobster Squad started</p>
                 </div>
               ) : (
                 instances.map(inst => (

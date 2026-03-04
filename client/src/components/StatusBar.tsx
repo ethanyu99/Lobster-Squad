@@ -86,10 +86,8 @@ export function StatusBar({ stats, instances, connected, onHistoryClick }: Statu
       <div className="px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center shadow-sm">
-              <span className="text-primary-foreground font-bold text-xs">OC</span>
-            </div>
-            <h1 className="text-base font-bold tracking-tight text-foreground">OpenClaw Console</h1>
+            <img src="/favicon.svg" alt="Lobster Squad" className="w-6 h-6" />
+            <h1 className="text-base font-bold tracking-tight text-foreground">Lobster Squad</h1>
           </div>
           <div className="flex items-center gap-3 text-xs font-medium text-muted-foreground/80 bg-muted/50 px-3 py-1.5 rounded-full border border-border/50">
             <span>

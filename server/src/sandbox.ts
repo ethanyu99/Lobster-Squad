@@ -127,6 +127,10 @@ export async function createSandbox(
 
     await sandbox.commands.run('mkdir -p /home/user/.openclaw', { timeoutMs: 10_000 });
     await sandbox.files.write(OPENCLAW_CONFIG_PATH, configContent);
+    await sandbox.commands.run(
+      'chmod 755 /home/user /home/user/.openclaw && chmod 644 /home/user/.openclaw/config.json',
+      { timeoutMs: 10_000 },
+    );
     emit({ step: 'config_written', message: 'OpenClaw configuration written' });
 
     emit({ step: 'starting_gateway', message: `Starting OpenClaw Gateway on port ${GATEWAY_PORT}` });
