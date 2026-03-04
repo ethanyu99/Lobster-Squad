@@ -5,15 +5,16 @@
 ### 数据模型
 
 - [ ] 新增 **Team** 数据模型（包含名称、描述、成员角色列表）
-- [ ] 新增 **ClawRole** 角色系统（persona / skills / tools 配置）
-- [ ] 每个 Instance 支持绑定角色，配置独立的 system prompt 和技能标签
+- [ ] 新增 **ClawRole** 通用角色模型：`name`（名称）、`description`（职责描述）、`capabilities`（能力标签）、`isLead`（是否为 Team Lead）
+- [ ] 每个 Instance 支持绑定角色，平台根据角色定义动态生成 System Prompt（注入职责、能力、团队信息）
+- [ ] 角色定义完全由用户 / 模板提供，平台不预设任何角色语义
 
 ### 团队模板
 
-- [ ] 提供预设团队模板：**全栈开发组**（Architect + Coder + Reviewer + Tester）
-- [ ] 提供预设团队模板：**内容创作组**（Researcher + Writer + Editor）
-- [ ] 提供预设团队模板：**数据分析组**（Analyst + Visualizer + Reporter）
-- [ ] 支持用户自定义团队模板
+- [ ] 提供预设团队模板：**全栈开发组**（架构师[Lead] + 开发者 + 测试 + 代码审查）
+- [ ] 提供预设团队模板：**内容创作组**（内容策划[Lead] + 用户分析师 + 文案 + 发布运营）
+- [ ] 提供预设团队模板：**数据分析组**（分析主管[Lead] + 数据分析师 + 可视化 + 报告撰写）
+- [ ] 支持用户自定义团队模板和角色
 
 ### 前端
 
