@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import type { InstancePublic, WSMessage } from '@shared/types';
+import type { InstancePublic, WSMessage, TurnSummary } from '@shared/types';
 import { fetchInstances, createWebSocket } from '@/lib/api';
 import {
   addExchangeToSession,
   updateExchange,
   type SessionExchange,
-  saveTeamExecution,
   getTeamExecutions,
   type TeamExecutionHistory,
+  saveExecution,
+  getExecutions,
+  type ExecutionHistory,
 } from '@/lib/storage';
 
 interface PendingExchange {
@@ -182,151 +184,210 @@ export function useInstanceManager() {
         loadInstances();
         break;
 
-      case 'team:step': {
-        const phase = msg.payload.phase as string;
-        setTeamLogs(prev => [
-          ...prev,
-          {
-            teamId: msg.teamId || '',
-            message: msg.payload.message || '',
-            phase,
-            timestamp: msg.timestamp,
-          },
-        ]);
+      // ── Autonomous Execution Events ──
 
-        if (phase === 'planning') {
-          const execId = crypto.randomUUID();
-          activeTeamExecutionRef.current = {
-            id: execId,
-            teamId: msg.teamId || '',
-            teamName: msg.payload.teamName || '',
-            goal: msg.payload.goal || '',
-            steps: [],
-            status: 'running',
-            createdAt: msg.timestamp,
-          };
-        } else if (phase === 'planned' && activeTeamExecutionRef.current) {
-          activeTeamExecutionRef.current.plan = msg.payload.plan;
-        } else if (phase === 'step_start' && activeTeamExecutionRef.current) {
-          const existing = activeTeamExecutionRef.current.steps.find(s => s.step === msg.payload.step);
+      case 'execution:started': {
+        const execId = msg.payload.executionId;
+        activeExecutionRef.current = {
+          id: execId,
+          teamId: msg.payload.teamId || msg.teamId || '',
+          teamName: msg.payload.teamName || '',
+          goal: msg.payload.goal || '',
+          turns: [],
+          edges: [],
+          status: 'running',
+          createdAt: msg.timestamp,
+        };
+        setExecutionLogs(prev => [...prev, {
+          executionId: execId,
+          message: `Execution started: ${msg.payload.goal}`,
+          type: 'execution:started',
+          timestamp: msg.timestamp,
+        }]);
+        break;
+      }
+
+      case 'execution:turn_start': {
+        const turn = msg.payload.turn as TurnSummary;
+        if (activeExecutionRef.current) {
+          const existing = activeExecutionRef.current.turns.find(t => t.id === turn.id);
           if (!existing) {
-            activeTeamExecutionRef.current.steps.push({
-              step: msg.payload.step,
-              role: msg.payload.role || '',
-              task: msg.payload.task || '',
-              instanceId: msg.payload.instanceId,
+            activeExecutionRef.current.turns.push({
+              id: turn.id,
+              seq: turn.seq,
+              role: turn.role,
+              instanceId: turn.instanceId,
+              task: turn.task,
               output: '',
               status: 'running',
+              depth: turn.depth,
+              parentTurnId: turn.parentTurnId,
               startedAt: msg.timestamp,
             });
           }
-        } else if (phase === 'step_done' && activeTeamExecutionRef.current) {
-          const stepRecord = activeTeamExecutionRef.current.steps.find(s => s.step === msg.payload.step);
-          if (stepRecord) {
-            stepRecord.output = msg.payload.output || '';
-            stepRecord.status = 'completed';
-            stepRecord.completedAt = msg.timestamp;
-            stepRecord.task = msg.payload.task || stepRecord.task;
-          } else {
-            activeTeamExecutionRef.current.steps.push({
-              step: msg.payload.step,
-              role: msg.payload.role || '',
-              task: msg.payload.task || '',
-              instanceId: msg.payload.instanceId,
-              output: msg.payload.output || '',
-              status: 'completed',
-              completedAt: msg.timestamp,
-            });
+        }
+        setExecutionLogs(prev => [...prev, {
+          executionId: msg.payload.executionId,
+          message: msg.payload.message || `Turn ${turn.seq}: ${turn.role} started`,
+          type: 'execution:turn_start',
+          timestamp: msg.timestamp,
+          turnId: turn.id,
+          role: turn.role,
+        }]);
+        break;
+      }
+
+      case 'execution:turn_stream': {
+        const { turnId, chunk } = msg.payload;
+        setExecutionStreams(prev => ({
+          ...prev,
+          [turnId]: (prev[turnId] || '') + chunk,
+        }));
+        if (activeExecutionRef.current) {
+          const turnRec = activeExecutionRef.current.turns.find(t => t.id === turnId);
+          if (turnRec) turnRec.output += chunk;
+        }
+        // Also update instance-level streams for UI
+        if (msg.instanceId) {
+          setTaskStreams(prev => ({
+            ...prev,
+            [msg.instanceId!]: (prev[msg.instanceId!] || '') + chunk,
+          }));
+        }
+        break;
+      }
+
+      case 'execution:turn_complete': {
+        const turn = msg.payload.turn as TurnSummary;
+        if (activeExecutionRef.current) {
+          const turnRec = activeExecutionRef.current.turns.find(t => t.id === turn.id);
+          if (turnRec) {
+            turnRec.status = 'completed';
+            turnRec.completedAt = msg.timestamp;
+            turnRec.durationMs = turn.durationMs;
+            turnRec.actionType = turn.actionType;
+            turnRec.actionSummary = turn.actionSummary;
           }
-        } else if (phase === 'step_error' && activeTeamExecutionRef.current) {
-          const stepRecord = activeTeamExecutionRef.current.steps.find(s => s.step === msg.payload.step);
-          if (stepRecord) {
-            stepRecord.status = 'failed';
-            stepRecord.completedAt = msg.timestamp;
-          } else {
-            activeTeamExecutionRef.current.steps.push({
-              step: msg.payload.step,
-              role: msg.payload.role || '',
-              task: msg.payload.task,
-              output: '',
-              status: 'failed',
-              completedAt: msg.timestamp,
-            });
+        }
+        // Clear instance stream
+        if (msg.instanceId) {
+          setTaskStreams(prev => {
+            const next = { ...prev };
+            delete next[msg.instanceId!];
+            return next;
+          });
+        }
+        setExecutionStreams(prev => {
+          const next = { ...prev };
+          delete next[turn.id];
+          return next;
+        });
+        setExecutionLogs(prev => [...prev, {
+          executionId: msg.payload.executionId,
+          message: `Turn ${turn.seq}: ${turn.role} completed${msg.payload.action ? ` → ${msg.payload.action.summary}` : ''}`,
+          type: 'execution:turn_complete',
+          timestamp: msg.timestamp,
+          turnId: turn.id,
+          role: turn.role,
+        }]);
+        break;
+      }
+
+      case 'execution:turn_failed': {
+        const turn = msg.payload.turn as TurnSummary;
+        if (activeExecutionRef.current) {
+          const turnRec = activeExecutionRef.current.turns.find(t => t.id === turn.id);
+          if (turnRec) {
+            turnRec.status = 'failed';
+            turnRec.completedAt = msg.timestamp;
+            turnRec.output = msg.payload.error || '';
           }
-        } else if (phase === 'step_skip' && activeTeamExecutionRef.current) {
-          activeTeamExecutionRef.current.steps.push({
-            step: msg.payload.step,
-            role: msg.payload.role || '',
-            task: msg.payload.task,
-            output: '',
-            status: 'skipped',
+        }
+        setExecutionLogs(prev => [...prev, {
+          executionId: msg.payload.executionId,
+          message: `Turn ${turn.seq}: ${turn.role} FAILED — ${msg.payload.error}`,
+          type: 'execution:turn_failed',
+          timestamp: msg.timestamp,
+          turnId: turn.id,
+          role: turn.role,
+        }]);
+        break;
+      }
+
+      case 'execution:edge_created': {
+        if (activeExecutionRef.current) {
+          activeExecutionRef.current.edges.push({
+            from: msg.payload.from,
+            to: msg.payload.to,
+            actionType: msg.payload.actionType,
           });
         }
         break;
       }
 
-      case 'team:complete': {
-        setTeamLogs(prev => [
-          ...prev,
-          {
-            teamId: msg.teamId || '',
-            message: msg.payload.message || '',
-            phase: 'team:complete',
-            timestamp: msg.timestamp,
-          },
-        ]);
-
-        if (activeTeamExecutionRef.current) {
-          const exec = activeTeamExecutionRef.current;
-          exec.status = 'completed';
-          exec.completedAt = msg.timestamp;
-          if (msg.payload.goal) exec.goal = msg.payload.goal;
-          if (msg.payload.teamName) exec.teamName = msg.payload.teamName;
-
-          if (msg.payload.results) {
-            for (const r of msg.payload.results as Array<{ step: number; role: string; output: string }>) {
-              const existing = exec.steps.find(s => s.step === r.step);
-              if (existing) {
-                if (r.output) existing.output = r.output;
-              } else {
-                exec.steps.push({
-                  step: r.step,
-                  role: r.role || '',
-                  output: r.output || '',
-                  status: 'completed',
-                  completedAt: msg.timestamp,
-                });
-              }
-            }
-            exec.steps.sort((a, b) => a.step - b.step);
-          }
-
-          saveTeamExecution(exec);
-          setTeamExecutions(prev => [exec, ...prev.filter(e => e.id !== exec.id)]);
-          activeTeamExecutionRef.current = null;
-        }
+      case 'execution:warning': {
+        setExecutionLogs(prev => [...prev, {
+          executionId: msg.payload.executionId || '',
+          message: `WARNING: ${msg.payload.message}`,
+          type: 'execution:warning',
+          timestamp: msg.timestamp,
+        }]);
         break;
       }
 
-      case 'team:error': {
-        setTeamLogs(prev => [
-          ...prev,
-          {
-            teamId: msg.teamId || '',
-            message: msg.payload.error || msg.payload.message || '',
-            phase: 'team:error',
-            timestamp: msg.timestamp,
-          },
-        ]);
-
-        if (activeTeamExecutionRef.current) {
-          const exec = activeTeamExecutionRef.current;
-          exec.status = 'failed';
+      case 'execution:completed': {
+        if (activeExecutionRef.current) {
+          const exec = activeExecutionRef.current;
+          exec.status = 'completed';
           exec.completedAt = msg.timestamp;
-          saveTeamExecution(exec);
-          setTeamExecutions(prev => [exec, ...prev.filter(e => e.id !== exec.id)]);
-          activeTeamExecutionRef.current = null;
+          exec.summary = msg.payload.summary;
+          exec.graph = msg.payload.graph;
+          exec.metrics = msg.payload.metrics;
+          if (msg.payload.teamName) exec.teamName = msg.payload.teamName;
+          if (msg.payload.goal) exec.goal = msg.payload.goal;
+
+          saveExecution(exec);
+          setExecutions(prev => [exec, ...prev.filter(e => e.id !== exec.id)]);
+          activeExecutionRef.current = null;
         }
+        setExecutionLogs(prev => [...prev, {
+          executionId: msg.payload.executionId,
+          message: `Execution completed: ${msg.payload.summary}`,
+          type: 'execution:completed',
+          timestamp: msg.timestamp,
+        }]);
+        break;
+      }
+
+      case 'execution:timeout': {
+        if (activeExecutionRef.current) {
+          const exec = activeExecutionRef.current;
+          exec.status = 'timeout';
+          exec.completedAt = msg.timestamp;
+          exec.graph = msg.payload.graph;
+          exec.metrics = msg.payload.metrics;
+
+          saveExecution(exec);
+          setExecutions(prev => [exec, ...prev.filter(e => e.id !== exec.id)]);
+          activeExecutionRef.current = null;
+        }
+        setExecutionLogs(prev => [...prev, {
+          executionId: msg.payload.executionId,
+          message: `Execution TIMEOUT: ${msg.payload.message}`,
+          type: 'execution:timeout',
+          timestamp: msg.timestamp,
+        }]);
+        break;
+      }
+
+      // Legacy team:error (pre-execution validation errors)
+      case 'team:error': {
+        setExecutionLogs(prev => [...prev, {
+          executionId: '',
+          message: `Team error: ${msg.payload.error || msg.payload.message || 'Unknown error'}`,
+          type: 'team:error',
+          timestamp: msg.timestamp,
+        }]);
         break;
       }
     }
@@ -363,8 +424,8 @@ export function useInstanceManager() {
     };
   }, [connect, loadInstances]);
 
+  // Legacy team execution state (kept for backward compat with history drawer)
   const [teamLogs, setTeamLogs] = useState<Array<{ teamId: string; message: string; phase: string; timestamp: string }>>([]);
-  const activeTeamExecutionRef = useRef<TeamExecutionHistory | null>(null);
   const [teamExecutions, setTeamExecutions] = useState<TeamExecutionHistory[]>(() => getTeamExecutions());
 
   const clearTeamLogs = useCallback(() => setTeamLogs([]), []);
@@ -372,6 +433,27 @@ export function useInstanceManager() {
   const refreshTeamExecutions = useCallback(() => {
     setTeamExecutions(getTeamExecutions());
   }, []);
+
+  // New autonomous execution state
+  const [executionLogs, setExecutionLogs] = useState<Array<{
+    executionId: string;
+    message: string;
+    type: string;
+    timestamp: string;
+    turnId?: string;
+    role?: string;
+  }>>([]);
+  const [executionStreams, setExecutionStreams] = useState<Record<string, string>>({});
+  const activeExecutionRef = useRef<ExecutionHistory | null>(null);
+  const [executions, setExecutions] = useState<ExecutionHistory[]>(() => getExecutions());
+
+  const clearExecutionLogs = useCallback(() => setExecutionLogs([]), []);
+
+  const refreshExecutions = useCallback(() => {
+    setExecutions(getExecutions());
+  }, []);
+
+  const activeExecution = activeExecutionRef.current;
 
   const dispatchTeamTask = useCallback((teamId: string, content: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
@@ -415,5 +497,12 @@ export function useInstanceManager() {
     teamExecutions,
     refreshTeamExecutions,
     refreshInstances: loadInstances,
+    // Autonomous execution
+    executionLogs,
+    executionStreams,
+    executions,
+    activeExecution,
+    clearExecutionLogs,
+    refreshExecutions,
   };
 }

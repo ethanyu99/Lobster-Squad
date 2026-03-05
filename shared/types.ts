@@ -90,6 +90,130 @@ export interface InstanceStats {
   offline: number;
 }
 
+// ──────────────────────────────────────
+// Autonomous Collaboration Engine
+// ──────────────────────────────────────
+
+export interface ExecutionConfig {
+  maxTurns: number;
+  maxDepth: number;
+  turnTimeoutMs: number;
+  maxRetriesPerRole: number;
+}
+
+export interface ExecutionMetrics {
+  totalTurns: number;
+  totalDurationMs: number;
+  turnsByRole: Record<string, number>;
+  maxDepthReached: number;
+  feedbackCycles: number;
+  avgTurnDurationMs: number;
+  tokenUsage: { prompt: number; completion: number };
+}
+
+export type ExecutionStatus = 'running' | 'completed' | 'failed' | 'timeout';
+
+export interface Execution {
+  id: string;
+  teamId: string;
+  ownerId: string;
+  goal: string;
+  status: ExecutionStatus;
+  turns: Turn[];
+  summary?: string;
+  metrics: ExecutionMetrics;
+  config: ExecutionConfig;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export type TurnStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+export interface Turn {
+  id: string;
+  executionId: string;
+  seq: number;
+
+  role: string;
+  instanceId: string;
+
+  parentTurnId: string | null;
+  triggerAction: TurnAction | null;
+  depth: number;
+
+  task: string;
+
+  output: string;
+  action: TurnAction | null;
+
+  status: TurnStatus;
+  startedAt?: string;
+  completedAt?: string;
+  durationMs?: number;
+}
+
+export interface DelegateAction {
+  type: 'delegate';
+  to: string;
+  task: string;
+  context: 'full' | 'summary' | 'none';
+  message?: string;
+}
+
+export interface ReportAction {
+  type: 'report';
+  summary: string;
+}
+
+export interface FeedbackAction {
+  type: 'feedback';
+  to: string;
+  issue: string;
+  suggestion?: string;
+}
+
+export interface DoneAction {
+  type: 'done';
+  summary: string;
+}
+
+export type TurnAction =
+  | DelegateAction
+  | ReportAction
+  | FeedbackAction
+  | DoneAction;
+
+export interface GraphNode {
+  id: string;
+  seq: number;
+  role: string;
+  instanceId: string;
+  task: string;
+  output: string;
+  actionType: string;
+  status: string;
+  durationMs: number;
+  depth: number;
+}
+
+export interface GraphEdge {
+  id: string;
+  from: string;
+  to: string;
+  actionType: 'delegate' | 'report' | 'feedback' | 'done';
+  label: string;
+}
+
+export interface ExecutionGraph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export type TurnSummary = Pick<Turn, 'id' | 'seq' | 'role' | 'instanceId' | 'task' | 'status' | 'depth' | 'parentTurnId' | 'durationMs'> & {
+  actionType?: string;
+  actionSummary?: string;
+};
+
 // WebSocket message types
 export type WSMessageType =
   | 'task:dispatch'
@@ -101,7 +225,16 @@ export type WSMessageType =
   | 'team:dispatch'
   | 'team:step'
   | 'team:complete'
-  | 'team:error';
+  | 'team:error'
+  | 'execution:started'
+  | 'execution:turn_start'
+  | 'execution:turn_stream'
+  | 'execution:turn_complete'
+  | 'execution:turn_failed'
+  | 'execution:edge_created'
+  | 'execution:warning'
+  | 'execution:completed'
+  | 'execution:timeout';
 
 export interface WSMessage {
   type: WSMessageType;

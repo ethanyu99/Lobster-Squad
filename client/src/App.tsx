@@ -7,6 +7,7 @@ import { HistoryDrawer } from '@/components/HistoryDrawer';
 import { CreateTeamDialog } from '@/components/CreateTeamDialog';
 import { TeamCard } from '@/components/TeamCard';
 import { TeamExecutionDetailDialog } from '@/components/TeamExecutionDetailDialog';
+import { ExecutionPanel } from '@/components/ExecutionPanel';
 import { useInstanceManager } from '@/hooks/useInstanceManager';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { fetchTeams } from '@/lib/api';
@@ -19,8 +20,10 @@ export default function App() {
   const {
     instances, stats, taskStreams, connected,
     dispatchTask, dispatchTeamTask,
-    teamLogs, clearTeamLogs, teamExecutions,
+    teamExecutions,
     refreshInstances,
+    executionLogs, executionStreams, executions, activeExecution,
+    clearExecutionLogs,
   } = useInstanceManager();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ViewTab>('instances');
@@ -141,46 +144,17 @@ export default function App() {
         </div>
       </div>
 
-      {/* Team execution log */}
-      {teamLogs.length > 0 && (() => {
-        const isDone = teamLogs[teamLogs.length - 1]?.phase === 'team:complete' || teamLogs[teamLogs.length - 1]?.phase === 'team:error';
-        const latestExecution = teamExecutions[0];
-        return (
-          <div className="border-t border-border/60 bg-card/95 px-6 py-3 max-h-48 overflow-y-auto">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Team Execution</span>
-              <div className="flex items-center gap-2">
-                {isDone && latestExecution && (
-                  <button
-                    type="button"
-                    className="text-[10px] text-primary hover:text-primary/80 font-medium"
-                    onClick={() => {
-                      setSelectedExecution(latestExecution);
-                      setExecutionDetailOpen(true);
-                    }}
-                  >
-                    查看详情
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="text-[10px] text-muted-foreground hover:text-foreground"
-                  onClick={isDone ? clearTeamLogs : undefined}
-                >
-                  {isDone ? '清除' : 'Running...'}
-                </button>
-              </div>
-            </div>
-            <div className="space-y-1">
-              {teamLogs.slice(-20).map((log, i) => (
-                <div key={i} className="text-xs text-foreground/80">
-                  {log.message}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
+      {/* Execution panel */}
+      {executionLogs.length > 0 && (
+        <ExecutionPanel
+          logs={executionLogs}
+          streams={executionStreams}
+          activeExecution={activeExecution}
+          latestExecution={executions[0]}
+          onClear={clearExecutionLogs}
+          onViewDetail={() => {}}
+        />
+      )}
 
       <TaskInput instances={instances} teams={teams} onDispatch={dispatchTask} onTeamDispatch={dispatchTeamTask} />
 

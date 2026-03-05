@@ -1,4 +1,4 @@
-import type { InstancePublic, TaskSummary } from '@shared/types';
+import type { InstancePublic, TaskSummary, ExecutionGraph, ExecutionMetrics } from '@shared/types';
 
 const SESSIONS_KEY = 'openclaw-sessions';
 const TEAM_EXECUTIONS_KEY = 'openclaw-team-executions';
@@ -176,4 +176,83 @@ export function deleteTeamExecution(id: string): void {
 
 export function clearTeamExecutions(): void {
   localStorage.setItem(TEAM_EXECUTIONS_KEY, JSON.stringify([]));
+}
+
+// ─── Autonomous Execution History ─────────────────────────
+
+const EXECUTIONS_KEY = 'openclaw-executions';
+
+export interface ExecutionTurnRecord {
+  id: string;
+  seq: number;
+  role: string;
+  instanceId: string;
+  task: string;
+  output: string;
+  actionType?: string;
+  actionSummary?: string;
+  status: string;
+  depth: number;
+  parentTurnId: string | null;
+  durationMs?: number;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface ExecutionEdgeRecord {
+  from: string;
+  to: string;
+  actionType: string;
+}
+
+export interface ExecutionHistory {
+  id: string;
+  teamId: string;
+  teamName: string;
+  goal: string;
+  turns: ExecutionTurnRecord[];
+  edges: ExecutionEdgeRecord[];
+  graph?: ExecutionGraph;
+  metrics?: ExecutionMetrics;
+  status: 'running' | 'completed' | 'failed' | 'timeout';
+  summary?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export function getExecutions(): ExecutionHistory[] {
+  try {
+    const raw = localStorage.getItem(EXECUTIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveExecutions(executions: ExecutionHistory[]): void {
+  localStorage.setItem(EXECUTIONS_KEY, JSON.stringify(executions.slice(0, 50)));
+}
+
+export function saveExecution(execution: ExecutionHistory): void {
+  const executions = getExecutions();
+  const idx = executions.findIndex(e => e.id === execution.id);
+  if (idx >= 0) {
+    executions[idx] = execution;
+  } else {
+    executions.unshift(execution);
+  }
+  saveExecutions(executions);
+}
+
+export function getExecutionById(id: string): ExecutionHistory | undefined {
+  return getExecutions().find(e => e.id === id);
+}
+
+export function deleteExecution(id: string): void {
+  const executions = getExecutions().filter(e => e.id !== id);
+  saveExecutions(executions);
+}
+
+export function clearExecutions(): void {
+  localStorage.setItem(EXECUTIONS_KEY, JSON.stringify([]));
 }

@@ -1,17 +1,36 @@
-import type { WSMessage, TeamPublic, ClawRole, Instance } from '../../shared/types';
+import { v4 as uuid } from 'uuid';
+import type {
+  WSMessage, TeamPublic, ClawRole, Instance,
+  Execution, Turn, TurnAction, TurnSummary,
+  ExecutionConfig, ExecutionMetrics, ExecutionGraph, GraphNode, GraphEdge,
+  DelegateAction, FeedbackAction,
+} from '../../shared/types';
 import { store } from './store';
 import { logWS, createLogEntry } from './ws-logger';
+
+// ──────────────────────────────────────
+// Types
+// ──────────────────────────────────────
 
 interface BroadcastFn {
   (ownerId: string, message: WSMessage): void;
 }
 
-interface StepResult {
-  step: number;
-  role: string;
-  instanceId: string;
-  output: string;
+interface RoleInstance {
+  role: ClawRole;
+  instance: Instance;
 }
+
+const DEFAULT_CONFIG: ExecutionConfig = {
+  maxTurns: 50,
+  maxDepth: 15,
+  turnTimeoutMs: 600_000,
+  maxRetriesPerRole: 2,
+};
+
+// ──────────────────────────────────────
+// HTTP helpers
+// ──────────────────────────────────────
 
 function toHttpBase(endpoint: string | undefined): string {
   if (!endpoint) return '';
@@ -21,162 +40,259 @@ function toHttpBase(endpoint: string | undefined): string {
     .replace(/\/+$/, '');
 }
 
-function buildLeadPrompt(team: TeamPublic, goal: string): string {
+// ──────────────────────────────────────
+// Prompt building
+// ──────────────────────────────────────
+
+function buildTurnPrompt(
+  turn: Turn,
+  execution: Execution,
+  team: TeamPublic,
+): string {
+  const role = team.roles.find(r => r.name === turn.role)!;
+  const isLead = role.isLead;
+
   const memberList = team.roles
-    .map(r => {
-      const label = r.isLead ? '（你自己）' : '';
-      return `- **${r.name}**${label}：${r.description}｜能力：${r.capabilities.join('、')}`;
-    })
+    .map(r => `- **${r.name}**${r.isLead ? '（Lead）' : ''}：${r.description}｜能力：${r.capabilities.join('、')}`)
     .join('\n');
+
+  const executionSummary = buildExecutionSummary(execution, turn);
+
+  const upstreamContext = buildUpstreamContext(turn, execution);
+
+  const actionInstructions = buildActionInstructions(isLead, team);
 
   return `# 系统说明
 
-你正在一个**多实例协作编排平台**中工作。该平台管理着多个独立的 AI 实例，并通过编排引擎将它们组织为团队协作完成任务。
+你正在一个**多实例协作编排平台**中工作。你是团队「${team.name}」的**「${role.name}」**。
 
-**重要**：团队成员是平台上的独立 AI 实例，不是你本地的子代理或插件。你无需也不应该通过读取文件、检查配置等方式来查找团队成员——以下列出的成员信息由编排平台提供，是完整且准确的。
-
-你的角色是团队「${team.name}」的 **Lead（负责人）**，负责理解目标、制定执行计划，并将子任务分配给团队成员。编排引擎会自动将你的计划分发给对应的实例执行。
+**你的职责**：${role.description}
+**你的能力**：${role.capabilities.join('、')}
 
 ## 团队成员
 
-以下是平台已注册的团队成员（由编排引擎提供，无需验证）：
-
 ${memberList}
 
-## 用户目标
+## 团队目标
 
-${goal}
+${execution.goal}
 
-## 你的任务
+## 当前执行进展
 
-请根据以上团队成员的能力和用户目标，制定一个结构化的执行计划：
+${executionSummary}
 
-1. 分析用户目标，理解需要完成的工作
-2. 将工作拆解为具体的子任务
-3. 将每个子任务分配给最合适的团队成员
-4. 确定步骤之间的依赖关系
-5. 输出结构化的 JSON 执行计划
+## 你当前的任务
 
-## 输出格式要求
+${turn.task}
+${upstreamContext}
+---
 
-请在回复的最后输出一个 JSON 代码块。编排引擎将解析此 JSON 并自动调度执行：
-
-\`\`\`json
-{
-  "plan": [
-    {
-      "step": 1,
-      "assignTo": "角色名",
-      "task": "具体任务描述（越详细越好，这是该成员收到的唯一指令）",
-      "dependencies": [],
-      "contextNeeds": []
-    },
-    {
-      "step": 2,
-      "assignTo": "角色名",
-      "task": "具体任务描述",
-      "dependencies": [1],
-      "contextNeeds": [
-        { "fromStep": 1, "need": "full", "hint": "需要步骤1的完整输出作为参考" }
-      ]
-    }
-  ]
+${actionInstructions}`;
 }
+
+function buildExecutionSummary(execution: Execution, currentTurn: Turn): string {
+  const completed = execution.turns.filter(t => t.status === 'completed');
+  if (completed.length === 0) {
+    return '（这是第一轮，尚无历史记录）';
+  }
+
+  const causalChain = getCausalChain(execution, currentTurn);
+  const causalIds = new Set(causalChain.map(t => t.id));
+
+  const lines: string[] = [];
+
+  for (const t of completed) {
+    const isCausal = causalIds.has(t.id);
+    const actionDesc = t.action ? describeAction(t.action) : '（无后续操作）';
+
+    if (isCausal || completed.indexOf(t) >= completed.length - 5) {
+      lines.push(`Turn ${t.seq} │ **${t.role}** │ ${t.task.slice(0, 80)}${t.task.length > 80 ? '…' : ''}\n  └→ ${actionDesc}`);
+    } else {
+      lines.push(`Turn ${t.seq} │ ${t.role} │ ${actionDesc}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+function getCausalChain(execution: Execution, turn: Turn): Turn[] {
+  const chain: Turn[] = [];
+  let parentId = turn.parentTurnId;
+  while (parentId) {
+    const parent = execution.turns.find(t => t.id === parentId);
+    if (!parent) break;
+    chain.unshift(parent);
+    parentId = parent.parentTurnId;
+  }
+  return chain;
+}
+
+function buildUpstreamContext(turn: Turn, execution: Execution): string {
+  if (!turn.parentTurnId) return '';
+
+  const parent = execution.turns.find(t => t.id === turn.parentTurnId);
+  if (!parent || !parent.output) return '';
+
+  const contextLevel = (turn.triggerAction as DelegateAction)?.context;
+
+  let contextContent: string;
+  if (contextLevel === 'none') {
+    return '';
+  } else if (contextLevel === 'summary') {
+    contextContent = parent.output.slice(0, 1500);
+    if (parent.output.length > 1500) contextContent += '\n…（已截断）';
+  } else {
+    contextContent = parent.output;
+  }
+
+  const triggerType = turn.triggerAction?.type || 'delegate';
+  const fromLabel = triggerType === 'feedback'
+    ? `来自「${parent.role}」的反馈`
+    : `来自「${parent.role}」的上游产出`;
+
+  return `\n## ${fromLabel}\n\n${contextContent}\n`;
+}
+
+function describeAction(action: TurnAction): string {
+  switch (action.type) {
+    case 'delegate':
+      return `委派 → ${action.to}：${action.task.slice(0, 60)}`;
+    case 'report':
+      return `汇报：${action.summary.slice(0, 60)}`;
+    case 'feedback':
+      return `反馈 → ${action.to}：${action.issue.slice(0, 60)}`;
+    case 'done':
+      return `结束：${action.summary.slice(0, 60)}`;
+  }
+}
+
+function buildActionInstructions(isLead: boolean, team: TeamPublic): string {
+  const roleNames = team.roles.map(r => r.name).join('、');
+
+  let instructions = `## 完成任务后的操作指令
+
+完成以上任务后，你**必须**在回复末尾输出一个 JSON 代码块，告诉编排引擎下一步做什么。
+
+### 可用操作
+
+**1. 委派任务** — 将子任务交给其他团队成员执行：
+\`\`\`json
+{ "action": "delegate", "to": "角色名", "task": "具体任务描述（越详细越好）", "context": "full" }
+\`\`\`
+- \`to\`：必须是以下角色之一：${roleNames}
+- \`context\`：\`"full"\`（传递你的完整输出）、\`"summary"\`（传递摘要）、\`"none"\`（不传递）
+
+**2. 汇报结果** — 将工作成果汇报给委派你任务的人：
+\`\`\`json
+{ "action": "report", "summary": "工作成果摘要" }
 \`\`\`
 
-### 字段说明
-- **assignTo**：必须是上方团队成员列表中的角色名（精确匹配）
-- **task**：给该成员的具体任务描述，要足够详细，因为成员只能看到这个描述和上游步骤的输出
-- **dependencies**：依赖的前置步骤编号数组，编排引擎会确保按依赖顺序执行
-- **contextNeeds**：需要引用的上游步骤输出。need 可选值："full"（完整内容）、"summary"（摘要）
-- 你自己（Lead）也可以作为执行者出现在 plan 中`;
-}
+**3. 反馈问题** — 发现其他成员的产出有问题，请求他们修改：
+\`\`\`json
+{ "action": "feedback", "to": "角色名", "issue": "发现的问题描述", "suggestion": "修改建议" }
+\`\`\``;
 
-function buildStepPrompt(
-  step: { step: number; assignTo: string; task: string; contextNeeds?: { fromStep: number; need: string; hint?: string }[] },
-  role: ClawRole,
-  team: TeamPublic,
-  goal: string,
-  previousResults: StepResult[],
-): string {
-  let prompt = `# 系统说明
+  if (isLead) {
+    instructions += `
 
-你正在一个多实例协作编排平台中工作。你是团队「${team.name}」中的**「${role.name}」**，编排引擎已将一个子任务分配给你。
-
-**你的职责**：${role.description}
-
-## 团队总目标
-${goal}
-
-## 你当前要完成的任务
-${step.task}
-
-请专注完成以上任务，直接输出结果。
-`;
-
-  if (step.contextNeeds && step.contextNeeds.length > 0) {
-    prompt += '\n## 上游参考\n';
-    for (const need of step.contextNeeds) {
-      const upstream = previousResults.find(r => r.step === need.fromStep);
-      if (!upstream) continue;
-
-      const content = need.need === 'summary'
-        ? upstream.output.slice(0, 1000) + (upstream.output.length > 1000 ? '\n...(已截断)' : '')
-        : upstream.output;
-
-      prompt += `\n### 来自「${upstream.role}」（步骤 ${upstream.step}）\n`;
-      if (need.hint) prompt += `> ${need.hint}\n\n`;
-      prompt += content + '\n';
-    }
+**4. 结束任务** — 你作为 Lead，认为团队目标已达成，结束整个协作：
+\`\`\`json
+{ "action": "done", "summary": "最终总结" }
+\`\`\``;
   }
 
-  prompt += '\n请开始执行你的任务。';
-  return prompt;
+  instructions += `
+
+### 重要规则
+- 每次回复只能选择**一个**操作
+- JSON 必须放在回复末尾的代码块中
+- ${isLead ? '只有你（Lead）可以使用 "done" 结束任务' : '你不能使用 "done"，如果任务已完成请使用 "report" 汇报'}
+- 选择最合适的团队成员来委派任务，充分利用他们的能力`;
+
+  return instructions;
 }
 
-interface ParsedPlan {
-  plan: {
-    step: number;
-    assignTo: string;
-    task: string;
-    dependencies: number[];
-    contextNeeds?: { fromStep: number; need: string; hint?: string }[];
-  }[];
-}
+// ──────────────────────────────────────
+// Action parsing
+// ──────────────────────────────────────
 
-function parsePlanFromOutput(output: string): ParsedPlan | null {
-  // Try to extract JSON from markdown code block
+function parseActionFromOutput(output: string): TurnAction | null {
   const jsonMatch = output.match(/```json\s*([\s\S]*?)```/);
-  if (jsonMatch) {
-    try {
-      return JSON.parse(jsonMatch[1].trim());
-    } catch {
-      // fall through
+  const raw = jsonMatch ? jsonMatch[1].trim() : null;
+
+  if (!raw) {
+    const braceMatch = output.match(/\{\s*"action"\s*:\s*"(?:delegate|report|feedback|done)"[\s\S]*?\}/);
+    if (braceMatch) {
+      try {
+        return validateAction(JSON.parse(braceMatch[0]));
+      } catch { /* fall through */ }
     }
+    return null;
   }
 
-  // Try to find raw JSON object
-  const braceMatch = output.match(/\{[\s\S]*"plan"\s*:\s*\[[\s\S]*\]\s*\}/);
-  if (braceMatch) {
-    try {
-      return JSON.parse(braceMatch[0]);
-    } catch {
-      // fall through
-    }
+  try {
+    return validateAction(JSON.parse(raw));
+  } catch {
+    return null;
   }
-
-  return null;
 }
+
+function validateAction(obj: Record<string, unknown>): TurnAction | null {
+  const action = obj.action as string;
+  if (!action) return null;
+
+  switch (action) {
+    case 'delegate': {
+      const to = obj.to as string;
+      const task = obj.task as string;
+      if (!to || !task) return null;
+      return {
+        type: 'delegate',
+        to,
+        task,
+        context: (['full', 'summary', 'none'].includes(obj.context as string)
+          ? obj.context as 'full' | 'summary' | 'none'
+          : 'full'),
+        message: (obj.message as string) || undefined,
+      };
+    }
+    case 'report': {
+      const summary = obj.summary as string;
+      if (!summary) return null;
+      return { type: 'report', summary };
+    }
+    case 'feedback': {
+      const to = obj.to as string;
+      const issue = obj.issue as string;
+      if (!to || !issue) return null;
+      return {
+        type: 'feedback',
+        to,
+        issue,
+        suggestion: (obj.suggestion as string) || undefined,
+      };
+    }
+    case 'done': {
+      const summary = obj.summary as string;
+      if (!summary) return null;
+      return { type: 'done', summary };
+    }
+    default:
+      return null;
+  }
+}
+
+// ──────────────────────────────────────
+// Instance calling (SSE stream)
+// ──────────────────────────────────────
 
 async function callInstance(
   instance: Instance,
   content: string,
   ownerId: string,
   broadcastToOwner: BroadcastFn,
-  teamId: string,
-  stepLabel: string,
-  stepNumber?: number,
-  stepRole?: string,
+  executionId: string,
+  turn: Turn,
 ): Promise<string> {
   const baseUrl = toHttpBase(instance.endpoint);
   const url = `${baseUrl}/v1/responses`;
@@ -189,9 +305,6 @@ async function callInstance(
     headers['Authorization'] = `Bearer ${instance.token}`;
   }
 
-  const sessionUser = store.getSessionKey(ownerId, instance.id);
-
-  // Reset session for team tasks to avoid context pollution
   store.resetSessionKey(ownerId, instance.id);
   const freshSession = store.getSessionKey(ownerId, instance.id);
 
@@ -202,8 +315,8 @@ async function callInstance(
     user: freshSession,
   });
 
-  console.log(`[team-dispatch] >>> Sending to [${instance.name}] step=${stepLabel} url=${url}`);
-  logWS(createLogEntry('outbound', instance.id, instance.name, `[team:${stepLabel}] ${body.slice(0, 200)}`));
+  console.log(`[execution] >>> Turn ${turn.seq} [${instance.name}] role=${turn.role}`);
+  logWS(createLogEntry('outbound', instance.id, instance.name, `[exec:turn-${turn.seq}] ${body.slice(0, 200)}`));
 
   store.updateInstance(instance.id, { status: 'busy' });
   broadcastToOwner(ownerId, {
@@ -217,7 +330,7 @@ async function callInstance(
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 600_000);
+    const timeout = setTimeout(() => controller.abort(), DEFAULT_CONFIG.turnTimeoutMs);
 
     const response = await fetch(url, {
       method: 'POST',
@@ -227,7 +340,6 @@ async function callInstance(
     });
 
     clearTimeout(timeout);
-    console.log(`[team-dispatch] [${instance.name}] HTTP ${response.status}`);
 
     if (!response.ok) {
       const errText = await response.text().catch(() => response.statusText);
@@ -239,16 +351,10 @@ async function callInstance(
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    let eventCount = 0;
-
-    console.log(`[team-dispatch] [${instance.name}] SSE stream started`);
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) {
-        console.log(`[team-dispatch] [${instance.name}] SSE done — ${eventCount} events, ${fullText.length} chars`);
-        break;
-      }
+      if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
@@ -261,28 +367,20 @@ async function callInstance(
 
         try {
           const event = JSON.parse(data);
-          eventCount++;
-
-          if (event.type === 'response.output_text.delta' && event.delta) {
-            if (eventCount <= 3 || eventCount % 100 === 0) {
-              console.log(`[team-dispatch] [${instance.name}] streaming… ${fullText.length + event.delta.length} chars so far`);
-            }
-          } else {
-            console.log(`[team-dispatch] [${instance.name}] ${event.type}${event.type === 'response.completed' ? ` (total ${fullText.length} chars)` : ''}`);
-          }
 
           if (event.type === 'response.output_text.delta' && event.delta) {
             fullText += event.delta;
             broadcastToOwner(ownerId, {
-              type: 'task:stream',
+              type: 'execution:turn_stream',
               payload: {
-                instanceId: instance.id,
+                executionId,
+                turnId: turn.id,
+                seq: turn.seq,
+                role: turn.role,
                 chunk: event.delta,
-                summary: event.delta.slice(0, 200),
-                ...(stepNumber != null && { step: stepNumber, role: stepRole }),
               },
               instanceId: instance.id,
-              teamId,
+              teamId: turn.executionId,
               timestamp: new Date().toISOString(),
             });
           }
@@ -307,10 +405,9 @@ async function callInstance(
       }
     }
   } catch (err) {
-    console.error(`[team-dispatch] [${instance.name}] ERROR:`, err instanceof Error ? err.message : err);
+    console.error(`[execution] Turn ${turn.seq} [${instance.name}] ERROR:`, err instanceof Error ? err.message : err);
     throw err;
   } finally {
-    console.log(`[team-dispatch] <<< [${instance.name}] done, output: ${fullText.slice(0, 150).replace(/\n/g, ' ')}${fullText.length > 150 ? '…' : ''}`);
     store.updateInstance(instance.id, { status: 'online' });
     broadcastToOwner(ownerId, {
       type: 'instance:status',
@@ -323,25 +420,109 @@ async function callInstance(
   return fullText;
 }
 
-function topologicalSort(steps: ParsedPlan['plan']): ParsedPlan['plan'] {
-  const sorted: ParsedPlan['plan'] = [];
-  const visited = new Set<number>();
-  const stepMap = new Map(steps.map(s => [s.step, s]));
+// ──────────────────────────────────────
+// Graph building
+// ──────────────────────────────────────
 
-  function visit(step: number) {
-    if (visited.has(step)) return;
-    visited.add(step);
-    const s = stepMap.get(step);
-    if (!s) return;
-    for (const dep of s.dependencies) {
-      visit(dep);
-    }
-    sorted.push(s);
+function buildExecutionGraph(execution: Execution): ExecutionGraph {
+  const nodes: GraphNode[] = execution.turns
+    .filter(t => t.status === 'completed' || t.status === 'failed')
+    .map(t => ({
+      id: t.id,
+      seq: t.seq,
+      role: t.role,
+      instanceId: t.instanceId,
+      task: t.task.slice(0, 120),
+      output: t.output.slice(0, 200),
+      actionType: t.action?.type || 'none',
+      status: t.status,
+      durationMs: t.durationMs || 0,
+      depth: t.depth,
+    }));
+
+  const edges: GraphEdge[] = execution.turns
+    .filter(t => t.parentTurnId)
+    .map(t => ({
+      id: `${t.parentTurnId}->${t.id}`,
+      from: t.parentTurnId!,
+      to: t.id,
+      actionType: (t.triggerAction?.type || 'delegate') as GraphEdge['actionType'],
+      label: t.triggerAction
+        ? describeAction(t.triggerAction).slice(0, 60)
+        : t.task.slice(0, 60),
+    }));
+
+  return { nodes, edges };
+}
+
+function computeMetrics(execution: Execution): ExecutionMetrics {
+  const completed = execution.turns.filter(t => t.status === 'completed');
+  const turnsByRole: Record<string, number> = {};
+  let feedbackCycles = 0;
+  let maxDepth = 0;
+
+  for (const t of completed) {
+    turnsByRole[t.role] = (turnsByRole[t.role] || 0) + 1;
+    if (t.depth > maxDepth) maxDepth = t.depth;
+    if (t.action?.type === 'feedback') feedbackCycles++;
   }
 
-  for (const s of steps) visit(s.step);
-  return sorted;
+  const totalDuration = execution.completedAt
+    ? new Date(execution.completedAt).getTime() - new Date(execution.createdAt).getTime()
+    : Date.now() - new Date(execution.createdAt).getTime();
+
+  const durations = completed.map(t => t.durationMs || 0);
+  const avgTurnDurationMs = durations.length > 0
+    ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+    : 0;
+
+  return {
+    totalTurns: completed.length,
+    totalDurationMs: totalDuration,
+    turnsByRole,
+    maxDepthReached: maxDepth,
+    feedbackCycles,
+    avgTurnDurationMs,
+    tokenUsage: { prompt: 0, completion: 0 },
+  };
 }
+
+function toTurnSummary(turn: Turn): TurnSummary {
+  return {
+    id: turn.id,
+    seq: turn.seq,
+    role: turn.role,
+    instanceId: turn.instanceId,
+    task: turn.task.slice(0, 200),
+    status: turn.status,
+    depth: turn.depth,
+    parentTurnId: turn.parentTurnId,
+    durationMs: turn.durationMs,
+    actionType: turn.action?.type,
+    actionSummary: turn.action ? describeAction(turn.action).slice(0, 100) : undefined,
+  };
+}
+
+// ──────────────────────────────────────
+// Role resolution
+// ──────────────────────────────────────
+
+function resolveRoleInstance(team: TeamPublic, roleName: string): RoleInstance | null {
+  const role = team.roles.find(r => r.name === roleName);
+  if (!role) return null;
+
+  const member = team.members.find(m => m.roleId === role.id);
+  if (!member?.instanceId) return null;
+
+  const instance = store.getInstanceRaw(member.instanceId);
+  if (!instance) return null;
+
+  return { role, instance };
+}
+
+// ──────────────────────────────────────
+// Main execution engine
+// ──────────────────────────────────────
 
 export async function dispatchToTeam(
   ownerId: string,
@@ -371,8 +552,8 @@ export async function dispatchToTeam(
     return;
   }
 
-  const leadMember = team.members.find(m => m.roleId === leadRole.id);
-  if (!leadMember?.instanceId) {
+  const leadRI = resolveRoleInstance(team, leadRole.name);
+  if (!leadRI) {
     broadcastToOwner(ownerId, {
       type: 'team:error',
       payload: { error: `Lead role "${leadRole.name}" has no bound instance` },
@@ -382,209 +563,493 @@ export async function dispatchToTeam(
     return;
   }
 
-  const leadInstance = store.getInstanceRaw(leadMember.instanceId);
-  if (!leadInstance) {
-    broadcastToOwner(ownerId, {
-      type: 'team:error',
-      payload: { error: 'Lead instance not found' },
-      teamId,
-      timestamp: new Date().toISOString(),
-    });
-    return;
-  }
+  const execution: Execution = {
+    id: uuid(),
+    teamId,
+    ownerId,
+    goal,
+    status: 'running',
+    turns: [],
+    config: { ...DEFAULT_CONFIG },
+    metrics: {
+      totalTurns: 0,
+      totalDurationMs: 0,
+      turnsByRole: {},
+      maxDepthReached: 0,
+      feedbackCycles: 0,
+      avgTurnDurationMs: 0,
+      tokenUsage: { prompt: 0, completion: 0 },
+    },
+    createdAt: new Date().toISOString(),
+  };
 
-  // Phase 1: Send to Lead for planning
   broadcastToOwner(ownerId, {
-    type: 'team:step',
+    type: 'execution:started',
     payload: {
-      phase: 'planning',
-      message: `🎯 Lead「${leadRole.name}」正在规划任务...`,
-      role: leadRole.name,
-      instanceId: leadInstance.id,
-      goal,
+      executionId: execution.id,
+      teamId,
       teamName: team.name,
+      goal,
+      leadRole: leadRole.name,
+      config: execution.config,
     },
     teamId,
     timestamp: new Date().toISOString(),
   });
 
-  let leadOutput: string;
-  try {
-    const leadPrompt = buildLeadPrompt(team, goal);
-    leadOutput = await callInstance(leadInstance, leadPrompt, ownerId, broadcastToOwner, teamId, 'planning');
-  } catch (err) {
-    broadcastToOwner(ownerId, {
-      type: 'team:error',
-      payload: { error: `Lead planning failed: ${err instanceof Error ? err.message : 'Unknown error'}` },
-      teamId,
-      timestamp: new Date().toISOString(),
-    });
-    return;
+  let seqCounter = 0;
+
+  const pendingTurns: Turn[] = [];
+  const roleFailures: Record<string, number> = {};
+
+  const memberCount = team.roles.filter(r => !r.isLead).length || 1;
+  const leadMaxRetries = execution.config.maxRetriesPerRole * memberCount;
+
+  function createTurn(
+    role: string,
+    instanceId: string,
+    task: string,
+    parentTurnId: string | null,
+    triggerAction: TurnAction | null,
+    depth: number,
+  ): Turn {
+    seqCounter++;
+    return {
+      id: uuid(),
+      executionId: execution.id,
+      seq: seqCounter,
+      role,
+      instanceId,
+      parentTurnId,
+      triggerAction,
+      depth,
+      task,
+      output: '',
+      action: null,
+      status: 'pending',
+    };
   }
 
-  // Phase 2: Parse execution plan
-  const parsed = parsePlanFromOutput(leadOutput);
-  if (!parsed || !parsed.plan || parsed.plan.length === 0) {
+  // Bootstrap: Lead receives the goal
+  pendingTurns.push(createTurn(
+    leadRole.name,
+    leadRI.instance.id,
+    goal,
+    null,
+    null,
+    0,
+  ));
+
+  // ── Main loop ──
+  while (pendingTurns.length > 0) {
+    // Safety: max turns
+    if (execution.turns.filter(t => t.status === 'completed').length >= execution.config.maxTurns) {
+      broadcastToOwner(ownerId, {
+        type: 'execution:warning',
+        payload: { message: `已达最大轮次上限 (${execution.config.maxTurns})，正在强制 Lead 总结…` },
+        teamId,
+        timestamp: new Date().toISOString(),
+      });
+
+      pendingTurns.length = 0;
+      pendingTurns.push(createTurn(
+        leadRole.name,
+        leadRI.instance.id,
+        `[系统强制指令] 已达最大执行轮次 (${execution.config.maxTurns})。请立即总结当前所有进展，使用 "done" 结束任务。\n\n团队目标：${goal}`,
+        null,
+        null,
+        0,
+      ));
+    }
+
+    const turn = pendingTurns.shift()!;
+
+    // Depth check
+    if (turn.depth >= execution.config.maxDepth) {
+      turn.task += `\n\n[系统提示: 已达最大委派深度 (${execution.config.maxDepth})，请直接汇报结果给上级，不要继续委派]`;
+    }
+
+    // Build prompt
+    const prompt = buildTurnPrompt(turn, execution, team);
+
+    // Broadcast: turn start
+    turn.status = 'running';
+    turn.startedAt = new Date().toISOString();
     broadcastToOwner(ownerId, {
-      type: 'team:step',
+      type: 'execution:turn_start',
       payload: {
-        phase: 'plan_failed',
-        message: 'Lead 未输出有效的执行计划 JSON，直接展示 Lead 的回复。',
-        output: leadOutput,
+        executionId: execution.id,
+        turn: toTurnSummary(turn),
+        message: `Turn ${turn.seq}：「${turn.role}」开始执行 — ${turn.task.slice(0, 80)}`,
       },
       teamId,
       timestamp: new Date().toISOString(),
     });
-    broadcastToOwner(ownerId, {
-      type: 'team:complete',
-      payload: {
-        message: 'Lead 已完成分析（未生成可编排的执行计划）',
-        goal,
-        teamName: team.name,
-        results: [{ step: 0, role: leadRole.name, output: leadOutput }],
-      },
-      teamId,
-      timestamp: new Date().toISOString(),
-    });
-    return;
-  }
 
-  broadcastToOwner(ownerId, {
-    type: 'team:step',
-    payload: {
-      phase: 'planned',
-      message: `📋 执行计划已生成，共 ${parsed.plan.length} 个步骤`,
-      plan: parsed.plan,
-    },
-    teamId,
-    timestamp: new Date().toISOString(),
-  });
-
-  // Phase 3: Execute steps in dependency order
-  const sortedSteps = topologicalSort(parsed.plan);
-  const results: StepResult[] = [];
-
-  for (const step of sortedSteps) {
-    const role = team.roles.find(r => r.name === step.assignTo);
-    if (!role) {
-      broadcastToOwner(ownerId, {
-        type: 'team:step',
-        payload: {
-          phase: 'step_skip',
-          step: step.step,
-          role: step.assignTo,
-          task: step.task,
-          message: `⚠️ 角色「${step.assignTo}」不存在，跳过步骤 ${step.step}`,
-        },
-        teamId,
-        timestamp: new Date().toISOString(),
-      });
-      continue;
-    }
-
-    const member = team.members.find(m => m.roleId === role.id);
-    if (!member?.instanceId) {
-      broadcastToOwner(ownerId, {
-        type: 'team:step',
-        payload: {
-          phase: 'step_skip',
-          step: step.step,
-          role: step.assignTo,
-          task: step.task,
-          message: `⚠️ 角色「${step.assignTo}」未绑定实例，跳过步骤 ${step.step}`,
-        },
-        teamId,
-        timestamp: new Date().toISOString(),
-      });
-      continue;
-    }
-
-    const instance = store.getInstanceRaw(member.instanceId);
-    if (!instance) {
-      broadcastToOwner(ownerId, {
-        type: 'team:step',
-        payload: {
-          phase: 'step_skip',
-          step: step.step,
-          role: step.assignTo,
-          task: step.task,
-          message: `⚠️ 实例不存在，跳过步骤 ${step.step}`,
-        },
-        teamId,
-        timestamp: new Date().toISOString(),
-      });
-      continue;
-    }
-
-    broadcastToOwner(ownerId, {
-      type: 'team:step',
-      payload: {
-        phase: 'step_start',
-        step: step.step,
-        role: step.assignTo,
-        task: step.task,
-        instanceId: instance.id,
-        message: `🔄 步骤 ${step.step}：「${step.assignTo}」正在执行 — ${step.task}`,
-      },
-      instanceId: instance.id,
-      teamId,
-      timestamp: new Date().toISOString(),
-    });
-
+    // Call instance
+    let output: string;
     try {
-      const prompt = buildStepPrompt(step, role, team, goal, results);
-      const output = await callInstance(instance, prompt, ownerId, broadcastToOwner, teamId, `step-${step.step}`, step.step, step.assignTo);
+      const ri = resolveRoleInstance(team, turn.role);
+      const inst = ri?.instance || store.getInstanceRaw(turn.instanceId);
+      if (!inst) throw new Error(`Instance not found for role "${turn.role}"`);
 
-      results.push({
-        step: step.step,
-        role: step.assignTo,
-        instanceId: instance.id,
-        output,
-      });
-
-      broadcastToOwner(ownerId, {
-        type: 'team:step',
-        payload: {
-          phase: 'step_done',
-          step: step.step,
-          role: step.assignTo,
-          task: step.task,
-          instanceId: instance.id,
-          message: `✅ 步骤 ${step.step}：「${step.assignTo}」已完成`,
-          output,
-        },
-        instanceId: instance.id,
-        teamId,
-        timestamp: new Date().toISOString(),
-      });
+      output = await callInstance(inst, prompt, ownerId, broadcastToOwner, execution.id, turn);
     } catch (err) {
+      turn.status = 'failed';
+      turn.completedAt = new Date().toISOString();
+      turn.durationMs = new Date(turn.completedAt).getTime() - new Date(turn.startedAt!).getTime();
+      turn.output = err instanceof Error ? err.message : 'Unknown error';
+      execution.turns.push(turn);
+
       broadcastToOwner(ownerId, {
-        type: 'team:step',
+        type: 'execution:turn_failed',
         payload: {
-          phase: 'step_error',
-          step: step.step,
-          role: step.assignTo,
-          message: `❌ 步骤 ${step.step} 失败: ${err instanceof Error ? err.message : 'Unknown error'}`,
+          executionId: execution.id,
+          turn: toTurnSummary(turn),
+          error: turn.output,
         },
         teamId,
         timestamp: new Date().toISOString(),
       });
+
+      // ── Retry / escalation logic ──
+      roleFailures[turn.role] = (roleFailures[turn.role] || 0) + 1;
+      const isLead = turn.role === leadRole.name;
+      const maxRetries = isLead ? leadMaxRetries : execution.config.maxRetriesPerRole;
+      const failures = roleFailures[turn.role];
+
+      if (failures < maxRetries) {
+        // Retry: re-enqueue the same task with a hint
+        broadcastToOwner(ownerId, {
+          type: 'execution:warning',
+          payload: {
+            message: `「${turn.role}」执行失败 (${failures}/${maxRetries})，正在重试…`,
+            turnId: turn.id,
+          },
+          teamId,
+          timestamp: new Date().toISOString(),
+        });
+
+        const ri = resolveRoleInstance(team, turn.role);
+        if (ri) {
+          const retryTurn = createTurn(
+            turn.role,
+            ri.instance.id,
+            `[系统提示: 上一次执行失败，错误信息: ${turn.output.slice(0, 200)}。请重试以下任务]\n\n${turn.task}`,
+            turn.parentTurnId,
+            turn.triggerAction,
+            turn.depth,
+          );
+          pendingTurns.push(retryTurn);
+          broadcastEdge(ownerId, teamId, turn.id, retryTurn.id, 'delegate', broadcastToOwner);
+        }
+      } else {
+        // Retries exhausted
+        if (isLead) {
+          // Lead exhausted → execution fails
+          execution.status = 'failed';
+          execution.completedAt = new Date().toISOString();
+          execution.metrics = computeMetrics(execution);
+
+          broadcastToOwner(ownerId, {
+            type: 'execution:completed',
+            payload: {
+              executionId: execution.id,
+              summary: `执行失败：Lead「${turn.role}」连续失败 ${failures} 次，已耗尽重试次数`,
+              graph: buildExecutionGraph(execution),
+              metrics: execution.metrics,
+              goal,
+              teamName: team.name,
+              status: 'failed',
+            },
+            teamId,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+
+        // Non-Lead exhausted → escalate to parent or Lead
+        broadcastToOwner(ownerId, {
+          type: 'execution:warning',
+          payload: {
+            message: `「${turn.role}」重试次数耗尽 (${failures}/${maxRetries})，将失败信息上报给上级`,
+            turnId: turn.id,
+          },
+          teamId,
+          timestamp: new Date().toISOString(),
+        });
+
+        const parentTurn = turn.parentTurnId
+          ? execution.turns.find(t => t.id === turn.parentTurnId)
+          : null;
+        const escalateRI = parentTurn
+          ? resolveRoleInstance(team, parentTurn.role)
+          : leadRI;
+
+        if (escalateRI) {
+          const escalateTask = `「${turn.role}」在执行任务时连续失败 ${failures} 次，已无法完成。\n\n**原始任务**：${turn.task.slice(0, 500)}\n**最后错误**：${turn.output.slice(0, 300)}\n\n请决定如何处理：你可以将任务重新分配给其他成员，或者调整任务后再次委派给该成员，或者汇报整体情况。`;
+          const escalateTurn = createTurn(
+            escalateRI.role.name,
+            escalateRI.instance.id,
+            escalateTask,
+            turn.id,
+            { type: 'report', summary: `${turn.role} 执行失败 ${failures} 次，任务未完成` },
+            turn.depth,
+          );
+          pendingTurns.push(escalateTurn);
+          broadcastEdge(ownerId, teamId, turn.id, escalateTurn.id, 'report', broadcastToOwner);
+        }
+      }
+      continue;
+    }
+
+    // Complete turn
+    turn.output = output;
+    turn.completedAt = new Date().toISOString();
+    turn.durationMs = new Date(turn.completedAt).getTime() - new Date(turn.startedAt!).getTime();
+    turn.status = 'completed';
+    roleFailures[turn.role] = 0;
+
+    const action = parseActionFromOutput(output);
+    turn.action = action;
+    execution.turns.push(turn);
+
+    // Broadcast: turn complete
+    broadcastToOwner(ownerId, {
+      type: 'execution:turn_complete',
+      payload: {
+        executionId: execution.id,
+        turn: toTurnSummary(turn),
+        action: action ? { type: action.type, summary: describeAction(action) } : null,
+      },
+      teamId,
+      timestamp: new Date().toISOString(),
+    });
+
+    // ── Route based on action ──
+    if (!action) {
+      const isLeadTurn = turn.role === leadRole.name;
+
+      if (isLeadTurn) {
+        // Lead with no parseable action → treat as implicit done
+        execution.status = 'completed';
+        execution.summary = output.slice(0, 2000);
+        execution.completedAt = new Date().toISOString();
+        execution.metrics = computeMetrics(execution);
+
+        broadcastToOwner(ownerId, {
+          type: 'execution:completed',
+          payload: {
+            executionId: execution.id,
+            summary: execution.summary,
+            graph: buildExecutionGraph(execution),
+            metrics: execution.metrics,
+            goal,
+            teamName: team.name,
+            status: 'completed',
+          },
+          teamId,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // Non-Lead with no action → auto-report to Lead (not to parentTurn's role)
+      const reportTask = `「${turn.role}」完成了任务，以下是其产出（未附带明确操作指令，系统自动汇报给你）：\n\n${output.slice(0, 3000)}`;
+      const newTurn = createTurn(
+        leadRole.name,
+        leadRI.instance.id,
+        reportTask,
+        turn.id,
+        { type: 'report', summary: output.slice(0, 200) },
+        turn.depth,
+      );
+      pendingTurns.push(newTurn);
+      broadcastEdge(ownerId, teamId, turn.id, newTurn.id, 'report', broadcastToOwner);
+      continue;
+    }
+
+    switch (action.type) {
+      case 'delegate': {
+        const targetRI = resolveRoleInstance(team, action.to);
+        if (!targetRI) {
+          broadcastToOwner(ownerId, {
+            type: 'execution:warning',
+            payload: {
+              message: `角色「${action.to}」不存在或未绑定实例，跳过该委派`,
+              turnId: turn.id,
+            },
+            teamId,
+            timestamp: new Date().toISOString(),
+          });
+          break;
+        }
+
+        roleFailures[targetRI.role.name] = 0;
+
+        const newTurn = createTurn(
+          targetRI.role.name,
+          targetRI.instance.id,
+          action.task,
+          turn.id,
+          action,
+          turn.depth + 1,
+        );
+        pendingTurns.push(newTurn);
+        broadcastEdge(ownerId, teamId, turn.id, newTurn.id, 'delegate', broadcastToOwner);
+        break;
+      }
+
+      case 'report': {
+        const parentTurn = turn.parentTurnId
+          ? execution.turns.find(t => t.id === turn.parentTurnId)
+          : null;
+        const targetRI = parentTurn
+          ? resolveRoleInstance(team, parentTurn.role)
+          : leadRI;
+
+        if (!targetRI) break;
+
+        // Avoid Lead reporting to Lead in an infinite loop
+        if (targetRI.role.name === turn.role && turn.role === leadRole.name) {
+          // Lead reported to itself — treat as done
+          execution.status = 'completed';
+          execution.summary = action.summary;
+          execution.completedAt = new Date().toISOString();
+          execution.metrics = computeMetrics(execution);
+
+          broadcastToOwner(ownerId, {
+            type: 'execution:completed',
+            payload: {
+              executionId: execution.id,
+              summary: action.summary,
+              graph: buildExecutionGraph(execution),
+              metrics: execution.metrics,
+              goal,
+              teamName: team.name,
+            },
+            teamId,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+
+        const reportTask = `「${turn.role}」向你汇报工作结果：\n\n**汇报摘要**：${action.summary}\n\n**详细内容**：\n${output.slice(0, 4000)}`;
+        const newTurn = createTurn(
+          targetRI.role.name,
+          targetRI.instance.id,
+          reportTask,
+          turn.id,
+          action,
+          turn.depth,
+        );
+        pendingTurns.push(newTurn);
+        broadcastEdge(ownerId, teamId, turn.id, newTurn.id, 'report', broadcastToOwner);
+        break;
+      }
+
+      case 'feedback': {
+        const targetRI = resolveRoleInstance(team, action.to);
+        if (!targetRI) {
+          broadcastToOwner(ownerId, {
+            type: 'execution:warning',
+            payload: {
+              message: `反馈目标角色「${action.to}」不存在或未绑定实例`,
+              turnId: turn.id,
+            },
+            teamId,
+            timestamp: new Date().toISOString(),
+          });
+          break;
+        }
+
+        roleFailures[targetRI.role.name] = 0;
+
+        const feedbackTask = `「${turn.role}」对你的工作提出了反馈，请根据反馈修改：\n\n**问题**：${action.issue}${action.suggestion ? `\n**建议**：${action.suggestion}` : ''}\n\n**原始上下文**：\n${output.slice(0, 3000)}`;
+        const newTurn = createTurn(
+          targetRI.role.name,
+          targetRI.instance.id,
+          feedbackTask,
+          turn.id,
+          action,
+          turn.depth,
+        );
+        pendingTurns.push(newTurn);
+        broadcastEdge(ownerId, teamId, turn.id, newTurn.id, 'feedback', broadcastToOwner);
+        break;
+      }
+
+      case 'done': {
+        if (turn.role === leadRole.name) {
+          execution.status = 'completed';
+          execution.summary = action.summary;
+          execution.completedAt = new Date().toISOString();
+          execution.metrics = computeMetrics(execution);
+
+          broadcastToOwner(ownerId, {
+            type: 'execution:completed',
+            payload: {
+              executionId: execution.id,
+              summary: action.summary,
+              graph: buildExecutionGraph(execution),
+              metrics: execution.metrics,
+              goal,
+              teamName: team.name,
+            },
+            teamId,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+
+        // Non-lead cannot end → convert to report to Lead
+        const reportTask = `「${turn.role}」认为任务已完成并汇报：\n\n${action.summary}\n\n**详细内容**：\n${output.slice(0, 4000)}`;
+        const newTurn = createTurn(
+          leadRole.name,
+          leadRI.instance.id,
+          reportTask,
+          turn.id,
+          { type: 'report', summary: action.summary },
+          turn.depth,
+        );
+        pendingTurns.push(newTurn);
+        broadcastEdge(ownerId, teamId, turn.id, newTurn.id, 'report', broadcastToOwner);
+        break;
+      }
     }
   }
 
-  // Phase 4: Complete
+  // Timeout
+  execution.status = 'timeout';
+  execution.completedAt = new Date().toISOString();
+  execution.metrics = computeMetrics(execution);
+
   broadcastToOwner(ownerId, {
-    type: 'team:complete',
+    type: 'execution:timeout',
     payload: {
-      message: `🎉 团队任务完成，共执行 ${results.length} 个步骤`,
+      executionId: execution.id,
+      message: '执行超时：所有待处理轮次已耗尽',
+      graph: buildExecutionGraph(execution),
+      metrics: execution.metrics,
       goal,
       teamName: team.name,
-      results: results.map(r => ({
-        step: r.step,
-        role: r.role,
-        output: r.output,
-      })),
     },
+    teamId,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+function broadcastEdge(
+  ownerId: string,
+  teamId: string,
+  fromId: string,
+  toId: string,
+  actionType: string,
+  broadcastToOwner: BroadcastFn,
+) {
+  broadcastToOwner(ownerId, {
+    type: 'execution:edge_created',
+    payload: { from: fromId, to: toId, actionType },
     teamId,
     timestamp: new Date().toISOString(),
   });
