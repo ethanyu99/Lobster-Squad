@@ -139,6 +139,10 @@ export async function createSandbox(
       'chmod 755 /home/user /home/user/.openclaw && chmod 644 /home/user/.openclaw/config.json',
       { timeoutMs: 10_000 },
     );
+    await sandbox.commands.run(
+      'chmod -R 755 /usr/local/lib/node_modules/openclaw/extensions/ 2>/dev/null || true',
+      { timeoutMs: 10_000 },
+    );
     emit({ step: 'config_written', message: 'OpenClaw configuration written' });
 
     emit({ step: 'starting_gateway', message: `Starting OpenClaw Gateway on port ${GATEWAY_PORT}` });
