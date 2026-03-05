@@ -13,10 +13,11 @@ import { taskRouter } from './routes/tasks';
 import { teamRouter } from './routes/teams';
 import { uploadRouter } from './routes/upload';
 import { instanceConfigRouter, teamConfigRouter } from './routes/sandbox-config';
+import { shareRouter, shareViewRouter } from './routes/share';
 import { setupWebSocket } from './ws';
 import { authMiddleware } from './auth';
 import { initDB } from './db';
-import { initStore } from './store';
+import { initStore, store } from './store';
 
 const app = express();
 const server = http.createServer(app);
@@ -32,6 +33,8 @@ app.use('/api/teams', authMiddleware, teamRouter);
 app.use('/api/teams', authMiddleware, teamConfigRouter);
 app.use('/api/instances', authMiddleware, instanceConfigRouter);
 app.use('/api/upload', uploadRouter);
+app.use('/api/share/view', shareViewRouter);
+app.use('/api/share', authMiddleware, shareRouter);
 
 // Serve locally uploaded files
 const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -58,6 +61,12 @@ setupWebSocket(wss);
 async function start() {
   await initDB();
   await initStore();
+
+  // Clean expired share tokens every hour
+  setInterval(() => {
+    store.cleanExpiredShareTokens();
+  }, 3600000);
+
   server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });

@@ -9,6 +9,7 @@ import { TeamCard } from '@/components/TeamCard';
 import { TeamExecutionDetailDialog } from '@/components/TeamExecutionDetailDialog';
 import { ExecutionPanel } from '@/components/ExecutionPanel';
 import { ExecutionReportDialog } from '@/components/ExecutionReportDialog';
+import { ShareView } from '@/components/ShareView';
 import { useInstanceManager } from '@/hooks/useInstanceManager';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { fetchTeams } from '@/lib/api';
@@ -18,7 +19,21 @@ import type { ExecutionHistory } from '@/lib/storage';
 
 type ViewTab = 'instances' | 'teams';
 
+function getShareToken(): string | null {
+  const match = window.location.pathname.match(/^\/share\/([a-f0-9]+)$/);
+  return match ? match[1] : null;
+}
+
 export default function App() {
+  const shareToken = getShareToken();
+  if (shareToken) {
+    return <ShareView token={shareToken} />;
+  }
+
+  return <MainApp />;
+}
+
+function MainApp() {
   const {
     instances, stats, taskStreams, connected,
     dispatchTask, dispatchTeamTask,

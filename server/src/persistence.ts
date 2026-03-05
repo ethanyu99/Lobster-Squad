@@ -1,5 +1,5 @@
 import { getPool } from './db';
-import type { Instance, TaskSummary, Team, ClawRole, TeamMemberSlot } from '../../shared/types';
+import type { Instance, TaskSummary, Team, ClawRole, TeamMemberSlot, ShareToken } from '../../shared/types';
 
 // ── Teams ──────────────────────────────
 
@@ -203,4 +203,52 @@ export async function saveTask(task: TaskSummary): Promise<void> {
       task.updatedAt,
     ]
   );
+}
+
+// ── Share Tokens ──────────────────────
+
+export async function loadShareTokens(): Promise<Map<string, ShareToken>> {
+  const pool = getPool();
+  const map = new Map<string, ShareToken>();
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM share_tokens WHERE expires_at > NOW() ORDER BY created_at ASC'
+    );
+    for (const row of rows) {
+      const st: ShareToken = {
+        id: row.id,
+        token: row.token,
+        ownerId: row.owner_id,
+        shareType: row.share_type,
+        targetId: row.target_id,
+        expiresAt: row.expires_at.toISOString(),
+        createdAt: row.created_at.toISOString(),
+      };
+      map.set(st.id, st);
+    }
+  } catch (err) {
+    console.error('[persistence] Failed to load share tokens from PG:', err);
+  }
+  return map;
+}
+
+export async function saveShareToken(st: ShareToken): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO share_tokens (id, token, owner_id, share_type, target_id, expires_at, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (id) DO NOTHING`,
+    [st.id, st.token, st.ownerId, st.shareType, st.targetId, st.expiresAt, st.createdAt]
+  );
+}
+
+export async function deleteShareTokenFromDB(id: string): Promise<void> {
+  const pool = getPool();
+  await pool.query('DELETE FROM share_tokens WHERE id = $1', [id]);
+}
+
+export async function cleanExpiredShareTokens(): Promise<number> {
+  const pool = getPool();
+  const result = await pool.query('DELETE FROM share_tokens WHERE expires_at < NOW()');
+  return result.rowCount || 0;
 }

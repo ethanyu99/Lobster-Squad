@@ -87,7 +87,20 @@ async function migrate() {
     END $$;
   `);
 
-  // Step 4: Create indexes (after all columns exist)
+  // Step 4: Create share_tokens table
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS share_tokens (
+      id UUID PRIMARY KEY,
+      token VARCHAR(64) UNIQUE NOT NULL,
+      owner_id VARCHAR(255) NOT NULL,
+      share_type VARCHAR(20) NOT NULL,
+      target_id UUID NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  // Step 5: Create indexes (after all columns exist)
   await p.query(`
     CREATE INDEX IF NOT EXISTS idx_teams_owner_id ON teams(owner_id);
     CREATE INDEX IF NOT EXISTS idx_roles_team_id ON roles(team_id);
@@ -95,6 +108,8 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS idx_instances_team_id ON instances(team_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_instance_id ON tasks(instance_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_owner_id ON tasks(owner_id);
+    CREATE INDEX IF NOT EXISTS idx_share_tokens_token ON share_tokens(token);
+    CREATE INDEX IF NOT EXISTS idx_share_tokens_owner ON share_tokens(owner_id);
   `);
 
   console.log('[db] Migration complete');

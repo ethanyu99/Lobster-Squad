@@ -12,10 +12,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Edit2, Star, Link, Unlink, Users, Plus, X, Settings } from 'lucide-react';
+import { Trash2, Edit2, Star, Link, Unlink, Users, Plus, X, Settings, Share2 } from 'lucide-react';
 import type { TeamPublic, InstancePublic, ClawRole } from '@shared/types';
 import { deleteTeam, updateTeam, bindInstanceToRole, unbindInstance, addRoleToTeam, updateRole, deleteRole } from '@/lib/api';
 import { TeamConfigDialog } from '@/components/TeamConfigDialog';
+import { ShareDialog } from '@/components/ShareDialog';
 
 interface TeamCardProps {
   team: TeamPublic;
@@ -26,6 +27,7 @@ interface TeamCardProps {
 export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
   const [configOpen, setConfigOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [editName, setEditName] = useState(team.name);
   const [editDesc, setEditDesc] = useState(team.description || '');
   const [saving, setSaving] = useState(false);
@@ -184,6 +186,13 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
               </Badge>
             </div>
             <div className="flex items-center gap-1.5">
+              <Button
+                variant="ghost" size="icon" className="h-7 w-7 hover:bg-muted"
+                onClick={() => setShareOpen(true)}
+                title="Share"
+              >
+                <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
               <Button
                 variant="ghost" size="icon" className="h-7 w-7 hover:bg-muted"
                 onClick={() => setConfigOpen(true)}
@@ -396,6 +405,14 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
       </Dialog>
 
       <TeamConfigDialog team={team} open={configOpen} onOpenChange={setConfigOpen} />
+
+      <ShareDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        shareType="team"
+        targetId={team.id}
+        targetName={team.name}
+      />
 
       {/* Bind Instance Dialog */}
       <Dialog open={!!bindDialogRole} onOpenChange={v => { if (!v) setBindDialogRole(null); }}>

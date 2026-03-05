@@ -8,6 +8,7 @@ import { dispatchToTeam } from './team-dispatch';
 interface WSClient {
   ws: WebSocket;
   userId: string;
+  shareOwnerId?: string;
 }
 
 const clients = new Map<WebSocket, WSClient>();
@@ -294,6 +295,15 @@ function extractUserId(req: IncomingMessage): string | null {
   }
 }
 
+function extractShareToken(req: IncomingMessage): string | null {
+  try {
+    const url = new URL(req.url || '', `http://${req.headers.host}`);
+    return url.searchParams.get('shareToken');
+  } catch {
+    return null;
+  }
+}
+
 function validateAccessToken(req: IncomingMessage): boolean {
   const accessToken = process.env.ACCESS_TOKEN;
   if (!accessToken) return true;
@@ -312,6 +322,109 @@ export function setupWebSocket(wss: WebSocketServer) {
       return;
     }
 
+    const shareTokenStr = extractShareToken(req);
+
+    // Share token connection — can dispatch tasks to shared instances
+    if (shareTokenStr) {
+      const st = store.getShareTokenByToken(shareTokenStr);
+      if (!st) {
+        ws.close(4003, 'Invalid or expired share token');
+        return;
+      }
+
+      const shareOwnerId = st.ownerId;
+      const shareTargetId = st.targetId;
+      const shareType = st.shareType;
+
+      clients.set(ws, {
+        ws,
+        userId: shareOwnerId,
+        shareOwnerId,
+      });
+
+      // Build scoped instance list (hide sensitive fields)
+      const buildSharedInstances = () => {
+        if (shareType === 'instance') {
+          const inst = store.getInstance(shareOwnerId, shareTargetId);
+          return inst ? [{ ...inst, endpoint: '***', hasToken: false }] : [];
+        }
+        return store.getInstances(shareOwnerId)
+          .filter(i => i.teamId === shareTargetId)
+          .map(i => ({ ...i, endpoint: '***', hasToken: false }));
+      };
+
+      // Allowed instance IDs for this share scope
+      const getAllowedInstanceIds = (): Set<string> => {
+        if (shareType === 'instance') return new Set([shareTargetId]);
+        return new Set(
+          store.getInstances(shareOwnerId)
+            .filter(i => i.teamId === shareTargetId)
+            .map(i => i.id)
+        );
+      };
+
+      ws.send(JSON.stringify({
+        type: 'instance:status',
+        payload: {
+          instances: buildSharedInstances(),
+          stats: store.getStats(shareOwnerId),
+        },
+        timestamp: new Date().toISOString(),
+      }));
+
+      ws.on('message', (data) => {
+        try {
+          const msg: WSMessage = JSON.parse(data.toString());
+
+          if (msg.type === 'task:dispatch') {
+            const { instanceId, content, taskId: clientTaskId, newSession, imageUrls } = msg.payload as TaskDispatchPayload;
+
+            // Scope check: only allow dispatching to shared instances
+            if (!getAllowedInstanceIds().has(instanceId)) return;
+
+            const instance = store.getInstanceRawForOwner(shareOwnerId, instanceId);
+            if (!instance) return;
+
+            if (newSession) {
+              store.resetSessionKey(shareOwnerId, instanceId);
+            }
+            const sessionKey = store.getSessionKey(shareOwnerId, instanceId);
+
+            const displayContent = imageUrls?.length
+              ? `${content}${content ? '\n' : ''}[${imageUrls.length} image(s) attached]`
+              : content;
+
+            const task = store.createTask(shareOwnerId, instanceId, displayContent, clientTaskId || msg.taskId || undefined);
+
+            broadcastToOwner(shareOwnerId, {
+              type: 'task:status',
+              payload: { ...task },
+              instanceId,
+              taskId: task.id,
+              sessionKey,
+              timestamp: new Date().toISOString(),
+            });
+
+            dispatchToInstance(shareOwnerId, instanceId, task.id, content, false, imageUrls);
+          }
+
+          if (msg.type === 'team:dispatch' && shareType === 'team') {
+            const { teamId, content, newSession } = msg.payload as TeamDispatchPayload;
+            if (teamId !== shareTargetId) return;
+            dispatchToTeam(shareOwnerId, teamId, content, broadcastToOwner, newSession);
+          }
+        } catch {
+          // ignore parse errors
+        }
+      });
+
+      ws.on('close', () => {
+        clients.delete(ws);
+      });
+      return;
+    }
+
+    // Normal connection
     const userId = extractUserId(req);
     if (!userId) {
       ws.close(4002, 'userId required');

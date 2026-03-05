@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Trash2, RefreshCw, Cloud, Edit2, ExternalLink, Star, Settings } from 'lucide-react';
+import { Trash2, RefreshCw, Cloud, Edit2, ExternalLink, Star, Settings, Share2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,7 @@ import { deleteInstance, checkHealth, updateInstance } from '@/lib/api';
 import { getExchangeById } from '@/lib/storage';
 import { SessionDetailDialog } from '@/components/SessionDetailDialog';
 import { SandboxConfigDialog } from '@/components/SandboxConfigDialog';
+import { ShareDialog } from '@/components/ShareDialog';
 
 interface InstanceCardProps {
   instance: InstancePublic;
@@ -35,6 +36,7 @@ export function InstanceCard({ instance, taskStream, onRefresh }: InstanceCardPr
   const [detailOpen, setDetailOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [editName, setEditName] = useState(instance.name);
   const [editDesc, setEditDesc] = useState(instance.description || '');
   const [saving, setSaving] = useState(false);
@@ -131,6 +133,15 @@ export function InstanceCard({ instance, taskStream, onRefresh }: InstanceCardPr
               </Badge>
               <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-muted" onClick={handleHealth}>
                 <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 hover:bg-muted"
+                onClick={(e) => { e.stopPropagation(); setShareOpen(true); }}
+                title="Share"
+              >
+                <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
               <Button
                 variant="ghost"
@@ -280,6 +291,14 @@ export function InstanceCard({ instance, taskStream, onRefresh }: InstanceCardPr
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ShareDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        shareType="instance"
+        targetId={instance.id}
+        targetName={instance.name}
+      />
     </>
   );
 }

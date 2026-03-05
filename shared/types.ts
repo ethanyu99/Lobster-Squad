@@ -214,6 +214,31 @@ export type TurnSummary = Pick<Turn, 'id' | 'seq' | 'role' | 'instanceId' | 'tas
   actionSummary?: string;
 };
 
+// ──────────────────────────────────────
+// Share
+// ──────────────────────────────────────
+
+export interface ShareToken {
+  id: string;
+  token: string;
+  ownerId: string;
+  shareType: 'team' | 'instance';
+  targetId: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export type ShareDuration = '1h' | '3h' | '12h' | '1d' | '2d' | '3d';
+
+export interface ShareViewData {
+  shareType: 'team' | 'instance';
+  ownerShortId: string;
+  instances?: InstancePublic[];
+  team?: TeamPublic;
+  stats?: InstanceStats;
+  expiresAt: string;
+}
+
 // WebSocket message types
 export type WSMessageType =
   | 'task:dispatch'

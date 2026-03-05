@@ -1,4 +1,4 @@
-import type { InstancePublic, TaskSummary, WSMessage, InstanceStats, SandboxProgress, SandboxSSEEvent, TeamPublic, TeamTemplate, ClawRole } from '@shared/types';
+import type { InstancePublic, TaskSummary, WSMessage, InstanceStats, SandboxProgress, SandboxSSEEvent, TeamPublic, TeamTemplate, ClawRole, ShareToken, ShareDuration, ShareViewData } from '@shared/types';
 import { getUserId } from './user';
 
 const API_BASE = '/api';
@@ -391,4 +391,62 @@ export function createWebSocket(onMessage: (msg: WSMessage) => void): WebSocket 
   };
 
   return ws;
+}
+
+export function createShareWebSocket(shareToken: string, onMessage: (msg: WSMessage) => void): WebSocket {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const ws = new WebSocket(`${protocol}//${window.location.host}/ws?shareToken=${encodeURIComponent(shareToken)}`);
+
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      onMessage(msg);
+    } catch {
+      // ignore
+    }
+  };
+
+  return ws;
+}
+
+// ── Share API ─────────────────────────
+
+export async function createShareLink(data: {
+  shareType: 'team' | 'instance';
+  targetId: string;
+  duration: ShareDuration;
+}): Promise<{ shareToken: ShareToken }> {
+  const res = await fetch(`${API_BASE}/share`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Failed to create share link' }));
+    throw new Error(body.error || 'Failed to create share link');
+  }
+  return res.json();
+}
+
+export async function fetchShareTokens(): Promise<{ shareTokens: ShareToken[] }> {
+  const res = await fetch(`${API_BASE}/share`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Failed to fetch share tokens');
+  return res.json();
+}
+
+export async function revokeShareToken(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/share/${id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to revoke share token');
+}
+
+export async function fetchShareView(token: string): Promise<ShareViewData> {
+  const res = await fetch(`${API_BASE}/share/view/${token}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Share link is invalid or expired' }));
+    throw new Error(body.error || 'Share link is invalid or expired');
+  }
+  return res.json();
 }

@@ -1,10 +1,12 @@
-import type { Instance, InstancePublic, TaskSummary, Team, TeamPublic, ClawRole, TeamMemberSlot } from '../../shared/types';
+import type { Instance, InstancePublic, TaskSummary, Team, TeamPublic, ClawRole, TeamMemberSlot, ShareToken, ShareDuration } from '../../shared/types';
 import { v4 as uuid } from 'uuid';
+import crypto from 'crypto';
 import {
   loadInstances,
   loadTasks,
   loadTeams,
   loadRoles,
+  loadShareTokens,
   saveInstance,
   deleteInstanceFromDB,
   saveTask,
@@ -13,12 +15,26 @@ import {
   saveRole,
   deleteRoleFromDB,
   deleteRolesByTeam,
+  saveShareToken,
+  deleteShareTokenFromDB,
+  cleanExpiredShareTokens,
 } from './persistence';
 
 let instances: Map<string, Instance> = new Map();
 let tasks: Map<string, TaskSummary> = new Map();
 let teams: Map<string, Team> = new Map();
 let roles: Map<string, ClawRole> = new Map();
+let shareTokens: Map<string, ShareToken> = new Map();
+const shareTokenByToken: Map<string, string> = new Map(); // token string -> id
+
+const SHARE_DURATION_MS: Record<ShareDuration, number> = {
+  '1h': 3600000,
+  '3h': 10800000,
+  '12h': 43200000,
+  '1d': 86400000,
+  '2d': 172800000,
+  '3d': 259200000,
+};
 const rolesByTeam: Map<string, string[]> = new Map();
 const tasksByInstance: Map<string, string[]> = new Map();
 const sessionKeys: Map<string, string> = new Map();
@@ -49,6 +65,12 @@ export async function initStore() {
   roles = await loadRoles();
   instances = await loadInstances();
   tasks = await loadTasks();
+  shareTokens = await loadShareTokens();
+
+  // Rebuild share token index
+  for (const st of shareTokens.values()) {
+    shareTokenByToken.set(st.token, st.id);
+  }
 
   await rebuildTeamIndexes();
 
@@ -71,7 +93,7 @@ export async function initStore() {
     }
   }
 
-  console.log(`[store] Loaded ${teams.size} teams, ${roles.size} roles, ${instances.size} instances, ${tasks.size} tasks from database`);
+  console.log(`[store] Loaded ${teams.size} teams, ${roles.size} roles, ${instances.size} instances, ${tasks.size} tasks, ${shareTokens.size} share tokens from database`);
 }
 
 async function rebuildTeamIndexes() {
@@ -516,5 +538,72 @@ export const store = {
 
   getTeamExecutionSummaries(ownerId: string, teamId: string): Array<{ goal: string; summary: string; completedAt: string }> {
     return teamExecutionHistory.get(`${ownerId}:${teamId}`) || [];
+  },
+
+  // ── Share token operations ─────────
+
+  createShareToken(ownerId: string, shareType: 'team' | 'instance', targetId: string, duration: ShareDuration): ShareToken {
+    const id = uuid();
+    const token = crypto.randomBytes(32).toString('hex');
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + SHARE_DURATION_MS[duration]);
+
+    const st: ShareToken = {
+      id,
+      token,
+      ownerId,
+      shareType,
+      targetId,
+      expiresAt: expiresAt.toISOString(),
+      createdAt: now.toISOString(),
+    };
+
+    shareTokens.set(id, st);
+    shareTokenByToken.set(token, id);
+    saveShareToken(st).catch(err => console.error('[store] Failed to persist share token:', err));
+    return st;
+  },
+
+  getShareTokenByToken(token: string): ShareToken | undefined {
+    const id = shareTokenByToken.get(token);
+    if (!id) return undefined;
+    const st = shareTokens.get(id);
+    if (!st) return undefined;
+    if (new Date(st.expiresAt) < new Date()) {
+      shareTokens.delete(id);
+      shareTokenByToken.delete(token);
+      deleteShareTokenFromDB(id).catch(() => {});
+      return undefined;
+    }
+    return st;
+  },
+
+  getShareTokensByOwner(ownerId: string): ShareToken[] {
+    const now = new Date();
+    return Array.from(shareTokens.values()).filter(st => {
+      if (st.ownerId !== ownerId) return false;
+      if (new Date(st.expiresAt) < now) return false;
+      return true;
+    });
+  },
+
+  deleteShareToken(ownerId: string, id: string): boolean {
+    const st = shareTokens.get(id);
+    if (!st || st.ownerId !== ownerId) return false;
+    shareTokenByToken.delete(st.token);
+    shareTokens.delete(id);
+    deleteShareTokenFromDB(id).catch(err => console.error('[store] Failed to delete share token:', err));
+    return true;
+  },
+
+  cleanExpiredShareTokens(): void {
+    const now = new Date();
+    for (const [id, st] of shareTokens) {
+      if (new Date(st.expiresAt) < now) {
+        shareTokenByToken.delete(st.token);
+        shareTokens.delete(id);
+      }
+    }
+    cleanExpiredShareTokens().catch(err => console.error('[store] Failed to clean expired tokens:', err));
   },
 };
