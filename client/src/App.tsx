@@ -6,18 +6,27 @@ import { TaskInput } from '@/components/TaskInput';
 import { HistoryDrawer } from '@/components/HistoryDrawer';
 import { CreateTeamDialog } from '@/components/CreateTeamDialog';
 import { TeamCard } from '@/components/TeamCard';
+import { TeamExecutionDetailDialog } from '@/components/TeamExecutionDetailDialog';
 import { useInstanceManager } from '@/hooks/useInstanceManager';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { fetchTeams } from '@/lib/api';
 import type { TeamPublic } from '@shared/types';
+import type { TeamExecutionHistory } from '@/lib/storage';
 
 type ViewTab = 'instances' | 'teams';
 
 export default function App() {
-  const { instances, stats, taskStreams, connected, dispatchTask, dispatchTeamTask, teamLogs, refreshInstances } = useInstanceManager();
+  const {
+    instances, stats, taskStreams, connected,
+    dispatchTask, dispatchTeamTask,
+    teamLogs, clearTeamLogs, teamExecutions,
+    refreshInstances,
+  } = useInstanceManager();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ViewTab>('instances');
   const [teams, setTeams] = useState<TeamPublic[]>([]);
+  const [selectedExecution, setSelectedExecution] = useState<TeamExecutionHistory | null>(null);
+  const [executionDetailOpen, setExecutionDetailOpen] = useState(false);
 
   const loadTeams = useCallback(async () => {
     try {
@@ -133,34 +142,63 @@ export default function App() {
       </div>
 
       {/* Team execution log */}
-      {teamLogs.length > 0 && (
-        <div className="border-t border-border/60 bg-card/95 px-6 py-3 max-h-48 overflow-y-auto">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Team Execution</span>
-            <button
-              type="button"
-              className="text-[10px] text-muted-foreground hover:text-foreground"
-              onClick={() => {
-                // Clear team logs - access via the hook is read-only, so we'd need a setter
-                // For now just keep showing
-              }}
-            >
-              {teamLogs[teamLogs.length - 1]?.phase === 'team:complete' || teamLogs[teamLogs.length - 1]?.phase === 'team:error' ? 'Done' : 'Running...'}
-            </button>
-          </div>
-          <div className="space-y-1">
-            {teamLogs.slice(-20).map((log, i) => (
-              <div key={i} className="text-xs text-foreground/80">
-                {log.message}
+      {teamLogs.length > 0 && (() => {
+        const isDone = teamLogs[teamLogs.length - 1]?.phase === 'team:complete' || teamLogs[teamLogs.length - 1]?.phase === 'team:error';
+        const latestExecution = teamExecutions[0];
+        return (
+          <div className="border-t border-border/60 bg-card/95 px-6 py-3 max-h-48 overflow-y-auto">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Team Execution</span>
+              <div className="flex items-center gap-2">
+                {isDone && latestExecution && (
+                  <button
+                    type="button"
+                    className="text-[10px] text-primary hover:text-primary/80 font-medium"
+                    onClick={() => {
+                      setSelectedExecution(latestExecution);
+                      setExecutionDetailOpen(true);
+                    }}
+                  >
+                    查看详情
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="text-[10px] text-muted-foreground hover:text-foreground"
+                  onClick={isDone ? clearTeamLogs : undefined}
+                >
+                  {isDone ? '清除' : 'Running...'}
+                </button>
               </div>
-            ))}
+            </div>
+            <div className="space-y-1">
+              {teamLogs.slice(-20).map((log, i) => (
+                <div key={i} className="text-xs text-foreground/80">
+                  {log.message}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <TaskInput instances={instances} teams={teams} onDispatch={dispatchTask} onTeamDispatch={dispatchTeamTask} />
 
-      <HistoryDrawer open={historyOpen} onOpenChange={setHistoryOpen} />
+      <HistoryDrawer
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        teamExecutions={teamExecutions}
+        onViewTeamExecution={(exec) => {
+          setSelectedExecution(exec);
+          setExecutionDetailOpen(true);
+        }}
+      />
+
+      <TeamExecutionDetailDialog
+        execution={selectedExecution}
+        open={executionDetailOpen}
+        onOpenChange={setExecutionDetailOpen}
+      />
     </div>
   );
 }

@@ -207,6 +207,44 @@ export async function deleteTeam(id: string): Promise<void> {
   if (!res.ok) throw new Error('Failed to delete team');
 }
 
+export async function addRoleToTeam(teamId: string, role: Omit<ClawRole, 'id'>): Promise<TeamPublic> {
+  const res = await fetch(`${API_BASE}/teams/${teamId}/roles`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(role),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: '添加角色失败' }));
+    throw new Error(body.error || '添加角色失败');
+  }
+  return res.json();
+}
+
+export async function updateRole(teamId: string, roleId: string, data: Partial<Omit<ClawRole, 'id'>>): Promise<TeamPublic> {
+  const res = await fetch(`${API_BASE}/teams/${teamId}/roles/${roleId}`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: '更新角色失败' }));
+    throw new Error(body.error || '更新角色失败');
+  }
+  return res.json();
+}
+
+export async function deleteRole(teamId: string, roleId: string): Promise<TeamPublic> {
+  const res = await fetch(`${API_BASE}/teams/${teamId}/roles/${roleId}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: '删除角色失败' }));
+    throw new Error(body.error || '删除角色失败');
+  }
+  return res.json();
+}
+
 export async function bindInstanceToRole(teamId: string, instanceId: string, roleId: string): Promise<TeamPublic> {
   const res = await fetch(`${API_BASE}/teams/${teamId}/bind`, {
     method: 'POST',

@@ -11,6 +11,7 @@ import {
   saveTeam,
   deleteTeamFromDB,
   saveRole,
+  deleteRoleFromDB,
   deleteRolesByTeam,
 } from './persistence';
 
@@ -388,6 +389,73 @@ export const store = {
   getRolesByTeam(teamId: string): ClawRole[] {
     const ids = rolesByTeam.get(teamId) || [];
     return ids.map(id => roles.get(id)).filter((r): r is ClawRole => !!r);
+  },
+
+  addRoleToTeam(teamId: string, roleDef: Omit<ClawRole, 'id'>): ClawRole | undefined {
+    const team = teams.get(teamId);
+    if (!team) return undefined;
+
+    const roleId = uuid();
+    const role: ClawRole = { id: roleId, ...roleDef };
+    roles.set(roleId, role);
+
+    const teamRoleIds = rolesByTeam.get(teamId) || [];
+    teamRoleIds.push(roleId);
+    rolesByTeam.set(teamId, teamRoleIds);
+
+    team.members.push({ roleId });
+    team.updatedAt = new Date().toISOString();
+    teams.set(teamId, team);
+
+    saveRole(role, teamId).catch(err => console.error('[store] Failed to persist role:', err));
+    saveTeam(team).catch(err => console.error('[store] Failed to persist team:', err));
+    return role;
+  },
+
+  updateRole(teamId: string, roleId: string, data: Partial<Omit<ClawRole, 'id'>>): ClawRole | undefined {
+    const team = teams.get(teamId);
+    if (!team) return undefined;
+    const teamRoleIds = rolesByTeam.get(teamId) || [];
+    if (!teamRoleIds.includes(roleId)) return undefined;
+
+    const role = roles.get(roleId);
+    if (!role) return undefined;
+
+    const updated: ClawRole = { ...role, ...data };
+    roles.set(roleId, updated);
+
+    team.updatedAt = new Date().toISOString();
+    teams.set(teamId, team);
+
+    saveRole(updated, teamId).catch(err => console.error('[store] Failed to persist role:', err));
+    saveTeam(team).catch(err => console.error('[store] Failed to persist team:', err));
+    return updated;
+  },
+
+  deleteRole(teamId: string, roleId: string): boolean {
+    const team = teams.get(teamId);
+    if (!team) return false;
+    const teamRoleIds = rolesByTeam.get(teamId) || [];
+    if (!teamRoleIds.includes(roleId)) return false;
+
+    // Unbind any instance from this role
+    for (const inst of instances.values()) {
+      if (inst.teamId === teamId && inst.roleId === roleId) {
+        const updated = { ...inst, teamId: undefined, roleId: undefined, updatedAt: new Date().toISOString() };
+        instances.set(inst.id, updated);
+        saveInstance(updated).catch(err => console.error('[store] Failed to persist instance:', err));
+      }
+    }
+
+    roles.delete(roleId);
+    rolesByTeam.set(teamId, teamRoleIds.filter(id => id !== roleId));
+    team.members = team.members.filter(m => m.roleId !== roleId);
+    team.updatedAt = new Date().toISOString();
+    teams.set(teamId, team);
+
+    deleteRoleFromDB(roleId).catch(err => console.error('[store] Failed to delete role:', err));
+    saveTeam(team).catch(err => console.error('[store] Failed to persist team:', err));
+    return true;
   },
 
   // ── Instance-Team binding ────────────

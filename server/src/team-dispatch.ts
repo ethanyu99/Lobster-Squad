@@ -23,25 +23,43 @@ function toHttpBase(endpoint: string | undefined): string {
 
 function buildLeadPrompt(team: TeamPublic, goal: string): string {
   const memberList = team.roles
-    .map(r => `- ${r.name}${r.isLead ? '（你自己）' : ''}：${r.description}  能力：${r.capabilities.join('、')}`)
+    .map(r => {
+      const label = r.isLead ? '（你自己）' : '';
+      return `- **${r.name}**${label}：${r.description}｜能力：${r.capabilities.join('、')}`;
+    })
     .join('\n');
 
-  return `你是团队「${team.name}」的 Lead，负责规划和协调。
+  return `# 系统说明
 
-## 你的团队成员
+你正在一个**多实例协作编排平台**中工作。该平台管理着多个独立的 AI 实例，并通过编排引擎将它们组织为团队协作完成任务。
+
+**重要**：团队成员是平台上的独立 AI 实例，不是你本地的子代理或插件。你无需也不应该通过读取文件、检查配置等方式来查找团队成员——以下列出的成员信息由编排平台提供，是完整且准确的。
+
+你的角色是团队「${team.name}」的 **Lead（负责人）**，负责理解目标、制定执行计划，并将子任务分配给团队成员。编排引擎会自动将你的计划分发给对应的实例执行。
+
+## 团队成员
+
+以下是平台已注册的团队成员（由编排引擎提供，无需验证）：
+
 ${memberList}
 
 ## 用户目标
+
 ${goal}
 
 ## 你的任务
-1. 理解用户目标
-2. 设计执行方案
-3. 将方案拆解为子任务，分配给合适的团队成员
-4. 输出结构化的执行计划
+
+请根据以上团队成员的能力和用户目标，制定一个结构化的执行计划：
+
+1. 分析用户目标，理解需要完成的工作
+2. 将工作拆解为具体的子任务
+3. 将每个子任务分配给最合适的团队成员
+4. 确定步骤之间的依赖关系
+5. 输出结构化的 JSON 执行计划
 
 ## 输出格式要求
-请在回复的最后输出一个 JSON 代码块，格式如下：
+
+请在回复的最后输出一个 JSON 代码块。编排引擎将解析此 JSON 并自动调度执行：
 
 \`\`\`json
 {
@@ -49,7 +67,7 @@ ${goal}
     {
       "step": 1,
       "assignTo": "角色名",
-      "task": "具体任务描述",
+      "task": "具体任务描述（越详细越好，这是该成员收到的唯一指令）",
       "dependencies": [],
       "contextNeeds": []
     },
@@ -59,17 +77,18 @@ ${goal}
       "task": "具体任务描述",
       "dependencies": [1],
       "contextNeeds": [
-        { "fromStep": 1, "need": "full", "hint": "为什么需要这个上下文" }
+        { "fromStep": 1, "need": "full", "hint": "需要步骤1的完整输出作为参考" }
       ]
     }
   ]
 }
 \`\`\`
 
-注意：
-- assignTo 必须是团队成员的角色名
-- dependencies 是依赖的前置步骤编号数组
-- contextNeeds.need 可选值："full"（完整内容）、"summary"（摘要）、"none"
+### 字段说明
+- **assignTo**：必须是上方团队成员列表中的角色名（精确匹配）
+- **task**：给该成员的具体任务描述，要足够详细，因为成员只能看到这个描述和上游步骤的输出
+- **dependencies**：依赖的前置步骤编号数组，编排引擎会确保按依赖顺序执行
+- **contextNeeds**：需要引用的上游步骤输出。need 可选值："full"（完整内容）、"summary"（摘要）
 - 你自己（Lead）也可以作为执行者出现在 plan 中`;
 }
 
@@ -80,14 +99,19 @@ function buildStepPrompt(
   goal: string,
   previousResults: StepResult[],
 ): string {
-  let prompt = `你是团队「${team.name}」中的「${role.name}」。
-职责：${role.description}
+  let prompt = `# 系统说明
 
-## 团队目标
+你正在一个多实例协作编排平台中工作。你是团队「${team.name}」中的**「${role.name}」**，编排引擎已将一个子任务分配给你。
+
+**你的职责**：${role.description}
+
+## 团队总目标
 ${goal}
 
-## 你的任务
+## 你当前要完成的任务
 ${step.task}
+
+请专注完成以上任务，直接输出结果。
 `;
 
   if (step.contextNeeds && step.contextNeeds.length > 0) {
@@ -151,6 +175,8 @@ async function callInstance(
   broadcastToOwner: BroadcastFn,
   teamId: string,
   stepLabel: string,
+  stepNumber?: number,
+  stepRole?: string,
 ): Promise<string> {
   const baseUrl = toHttpBase(instance.endpoint);
   const url = `${baseUrl}/v1/responses`;
@@ -176,7 +202,7 @@ async function callInstance(
     user: freshSession,
   });
 
-  console.log(`[team-dispatch] Sending to ${instance.name} (${instance.id}) at ${url} [${stepLabel}]`);
+  console.log(`[team-dispatch] >>> Sending to [${instance.name}] step=${stepLabel} url=${url}`);
   logWS(createLogEntry('outbound', instance.id, instance.name, `[team:${stepLabel}] ${body.slice(0, 200)}`));
 
   store.updateInstance(instance.id, { status: 'busy' });
@@ -193,7 +219,6 @@ async function callInstance(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 600_000);
 
-    console.log(`[team-dispatch] Fetching ${url}...`);
     const response = await fetch(url, {
       method: 'POST',
       headers: { ...headers, 'Connection': 'keep-alive' },
@@ -202,7 +227,7 @@ async function callInstance(
     });
 
     clearTimeout(timeout);
-    console.log(`[team-dispatch] Response status: ${response.status} from ${instance.name}`);
+    console.log(`[team-dispatch] [${instance.name}] HTTP ${response.status}`);
 
     if (!response.ok) {
       const errText = await response.text().catch(() => response.statusText);
@@ -216,12 +241,12 @@ async function callInstance(
     let buffer = '';
     let eventCount = 0;
 
-    console.log(`[team-dispatch] Starting SSE stream read from ${instance.name}`);
+    console.log(`[team-dispatch] [${instance.name}] SSE stream started`);
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) {
-        console.log(`[team-dispatch] SSE stream ended from ${instance.name}, ${eventCount} events, ${fullText.length} chars`);
+        console.log(`[team-dispatch] [${instance.name}] SSE done — ${eventCount} events, ${fullText.length} chars`);
         break;
       }
 
@@ -238,15 +263,24 @@ async function callInstance(
           const event = JSON.parse(data);
           eventCount++;
 
-          if (eventCount <= 3 || eventCount % 50 === 0) {
-            console.log(`[team-dispatch] Event #${eventCount} from ${instance.name}: ${event.type}`);
+          if (event.type === 'response.output_text.delta' && event.delta) {
+            if (eventCount <= 3 || eventCount % 100 === 0) {
+              console.log(`[team-dispatch] [${instance.name}] streaming… ${fullText.length + event.delta.length} chars so far`);
+            }
+          } else {
+            console.log(`[team-dispatch] [${instance.name}] ${event.type}${event.type === 'response.completed' ? ` (total ${fullText.length} chars)` : ''}`);
           }
 
           if (event.type === 'response.output_text.delta' && event.delta) {
             fullText += event.delta;
             broadcastToOwner(ownerId, {
               type: 'task:stream',
-              payload: { instanceId: instance.id, chunk: event.delta, summary: event.delta.slice(0, 200) },
+              payload: {
+                instanceId: instance.id,
+                chunk: event.delta,
+                summary: event.delta.slice(0, 200),
+                ...(stepNumber != null && { step: stepNumber, role: stepRole }),
+              },
               instanceId: instance.id,
               teamId,
               timestamp: new Date().toISOString(),
@@ -273,10 +307,10 @@ async function callInstance(
       }
     }
   } catch (err) {
-    console.error(`[team-dispatch] Error from ${instance.name}:`, err instanceof Error ? err.message : err);
+    console.error(`[team-dispatch] [${instance.name}] ERROR:`, err instanceof Error ? err.message : err);
     throw err;
   } finally {
-    console.log(`[team-dispatch] Finished with ${instance.name}, collected ${fullText.length} chars`);
+    console.log(`[team-dispatch] <<< [${instance.name}] done, output: ${fullText.slice(0, 150).replace(/\n/g, ' ')}${fullText.length > 150 ? '…' : ''}`);
     store.updateInstance(instance.id, { status: 'online' });
     broadcastToOwner(ownerId, {
       type: 'instance:status',
@@ -367,6 +401,8 @@ export async function dispatchToTeam(
       message: `🎯 Lead「${leadRole.name}」正在规划任务...`,
       role: leadRole.name,
       instanceId: leadInstance.id,
+      goal,
+      teamName: team.name,
     },
     teamId,
     timestamp: new Date().toISOString(),
@@ -403,6 +439,8 @@ export async function dispatchToTeam(
       type: 'team:complete',
       payload: {
         message: 'Lead 已完成分析（未生成可编排的执行计划）',
+        goal,
+        teamName: team.name,
         results: [{ step: 0, role: leadRole.name, output: leadOutput }],
       },
       teamId,
@@ -434,6 +472,8 @@ export async function dispatchToTeam(
         payload: {
           phase: 'step_skip',
           step: step.step,
+          role: step.assignTo,
+          task: step.task,
           message: `⚠️ 角色「${step.assignTo}」不存在，跳过步骤 ${step.step}`,
         },
         teamId,
@@ -449,6 +489,8 @@ export async function dispatchToTeam(
         payload: {
           phase: 'step_skip',
           step: step.step,
+          role: step.assignTo,
+          task: step.task,
           message: `⚠️ 角色「${step.assignTo}」未绑定实例，跳过步骤 ${step.step}`,
         },
         teamId,
@@ -464,6 +506,8 @@ export async function dispatchToTeam(
         payload: {
           phase: 'step_skip',
           step: step.step,
+          role: step.assignTo,
+          task: step.task,
           message: `⚠️ 实例不存在，跳过步骤 ${step.step}`,
         },
         teamId,
@@ -489,7 +533,7 @@ export async function dispatchToTeam(
 
     try {
       const prompt = buildStepPrompt(step, role, team, goal, results);
-      const output = await callInstance(instance, prompt, ownerId, broadcastToOwner, teamId, `step-${step.step}`);
+      const output = await callInstance(instance, prompt, ownerId, broadcastToOwner, teamId, `step-${step.step}`, step.step, step.assignTo);
 
       results.push({
         step: step.step,
@@ -504,9 +548,10 @@ export async function dispatchToTeam(
           phase: 'step_done',
           step: step.step,
           role: step.assignTo,
+          task: step.task,
           instanceId: instance.id,
           message: `✅ 步骤 ${step.step}：「${step.assignTo}」已完成`,
-          summary: output.slice(0, 300),
+          output,
         },
         instanceId: instance.id,
         teamId,
@@ -532,10 +577,12 @@ export async function dispatchToTeam(
     type: 'team:complete',
     payload: {
       message: `🎉 团队任务完成，共执行 ${results.length} 个步骤`,
+      goal,
+      teamName: team.name,
       results: results.map(r => ({
         step: r.step,
         role: r.role,
-        summary: r.output.slice(0, 500),
+        output: r.output,
       })),
     },
     teamId,

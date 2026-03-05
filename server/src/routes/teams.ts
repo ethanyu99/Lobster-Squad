@@ -92,6 +92,100 @@ teamRouter.delete('/:id', (req, res) => {
   res.status(204).send();
 });
 
+// Add a role to a team
+teamRouter.post('/:id/roles', (req, res) => {
+  const ownerId = req.userContext!.userId;
+  const { name, description, capabilities, isLead } = req.body;
+
+  const team = store.getTeam(ownerId, req.params.id);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Role name is required' });
+  }
+
+  // If new role is Lead, ensure no duplicate leads
+  if (isLead) {
+    const existingLead = team.roles.find(r => r.isLead);
+    if (existingLead) {
+      return res.status(400).json({ error: `角色「${existingLead.name}」已经是 Lead，请先取消其 Lead 状态` });
+    }
+  }
+
+  const role = store.addRoleToTeam(req.params.id, {
+    name: name.trim(),
+    description: (description || '').trim(),
+    capabilities: Array.isArray(capabilities) ? capabilities : [],
+    isLead: !!isLead,
+  });
+
+  if (!role) return res.status(500).json({ error: 'Failed to add role' });
+
+  const refreshedTeam = store.getTeam(ownerId, req.params.id);
+  res.status(201).json(refreshedTeam);
+});
+
+// Update a role in a team
+teamRouter.put('/:id/roles/:roleId', (req, res) => {
+  const ownerId = req.userContext!.userId;
+  const { name, description, capabilities, isLead } = req.body;
+
+  const team = store.getTeam(ownerId, req.params.id);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  const existingRole = team.roles.find(r => r.id === req.params.roleId);
+  if (!existingRole) return res.status(404).json({ error: 'Role not found in this team' });
+
+  // If setting isLead to true, check for existing lead (excluding this role)
+  if (isLead && !existingRole.isLead) {
+    const existingLead = team.roles.find(r => r.isLead && r.id !== req.params.roleId);
+    if (existingLead) {
+      return res.status(400).json({ error: `角色「${existingLead.name}」已经是 Lead，请先取消其 Lead 状态` });
+    }
+  }
+
+  const updateData: Partial<Omit<import('../../shared/types').ClawRole, 'id'>> = {};
+  if (name !== undefined) updateData.name = name.trim();
+  if (description !== undefined) updateData.description = description.trim();
+  if (capabilities !== undefined) updateData.capabilities = capabilities;
+  if (isLead !== undefined) updateData.isLead = isLead;
+
+  const updated = store.updateRole(req.params.id, req.params.roleId, updateData);
+  if (!updated) return res.status(500).json({ error: 'Failed to update role' });
+
+  const refreshedTeam = store.getTeam(ownerId, req.params.id);
+  res.json(refreshedTeam);
+});
+
+// Delete a role from a team
+teamRouter.delete('/:id/roles/:roleId', (req, res) => {
+  const ownerId = req.userContext!.userId;
+
+  const team = store.getTeam(ownerId, req.params.id);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  const role = team.roles.find(r => r.id === req.params.roleId);
+  if (!role) return res.status(404).json({ error: 'Role not found in this team' });
+
+  if (team.roles.length <= 2) {
+    return res.status(400).json({ error: '团队至少需要保留 2 个角色' });
+  }
+
+  // Don't allow deleting the only Lead
+  if (role.isLead) {
+    const otherLeads = team.roles.filter(r => r.isLead && r.id !== req.params.roleId);
+    if (otherLeads.length === 0) {
+      return res.status(400).json({ error: '无法删除唯一的 Lead 角色，请先指定其他角色为 Lead' });
+    }
+  }
+
+  const deleted = store.deleteRole(req.params.id, req.params.roleId);
+  if (!deleted) return res.status(500).json({ error: 'Failed to delete role' });
+
+  const refreshedTeam = store.getTeam(ownerId, req.params.id);
+  res.json(refreshedTeam);
+});
+
 // Bind an instance to a role in a team
 teamRouter.post('/:id/bind', (req, res) => {
   const ownerId = req.userContext!.userId;

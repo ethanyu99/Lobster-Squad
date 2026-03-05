@@ -1,6 +1,7 @@
 import type { InstancePublic, TaskSummary } from '@shared/types';
 
 const SESSIONS_KEY = 'openclaw-sessions';
+const TEAM_EXECUTIONS_KEY = 'openclaw-team-executions';
 
 export interface SessionExchange {
   id: string;
@@ -106,4 +107,73 @@ export function resolveInstanceByName(name: string, instances: InstancePublic[])
   const lower = name.toLowerCase();
   return instances.find(i => i.name.toLowerCase() === lower) ||
     instances.find(i => i.name.toLowerCase().startsWith(lower));
+}
+
+// ─── Team Execution History ─────────────────────────
+
+export interface TeamStepRecord {
+  step: number;
+  role: string;
+  task?: string;
+  instanceId?: string;
+  output: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface TeamExecutionPlanStep {
+  step: number;
+  assignTo: string;
+  task: string;
+  dependencies: number[];
+}
+
+export interface TeamExecutionHistory {
+  id: string;
+  teamId: string;
+  teamName: string;
+  goal: string;
+  plan?: TeamExecutionPlanStep[];
+  steps: TeamStepRecord[];
+  status: 'running' | 'completed' | 'failed';
+  createdAt: string;
+  completedAt?: string;
+}
+
+export function getTeamExecutions(): TeamExecutionHistory[] {
+  try {
+    const raw = localStorage.getItem(TEAM_EXECUTIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveTeamExecutions(executions: TeamExecutionHistory[]): void {
+  localStorage.setItem(TEAM_EXECUTIONS_KEY, JSON.stringify(executions.slice(0, 50)));
+}
+
+export function saveTeamExecution(execution: TeamExecutionHistory): void {
+  const executions = getTeamExecutions();
+  const idx = executions.findIndex(e => e.id === execution.id);
+  if (idx >= 0) {
+    executions[idx] = execution;
+  } else {
+    executions.unshift(execution);
+  }
+  saveTeamExecutions(executions);
+}
+
+export function getTeamExecutionById(id: string): TeamExecutionHistory | undefined {
+  return getTeamExecutions().find(e => e.id === id);
+}
+
+export function deleteTeamExecution(id: string): void {
+  const executions = getTeamExecutions().filter(e => e.id !== id);
+  saveTeamExecutions(executions);
+}
+
+export function clearTeamExecutions(): void {
+  localStorage.setItem(TEAM_EXECUTIONS_KEY, JSON.stringify([]));
 }

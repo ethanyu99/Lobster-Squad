@@ -1,7 +1,14 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { InstancePublic, WSMessage } from '@shared/types';
 import { fetchInstances, createWebSocket } from '@/lib/api';
-import { addExchangeToSession, updateExchange, type SessionExchange } from '@/lib/storage';
+import {
+  addExchangeToSession,
+  updateExchange,
+  type SessionExchange,
+  saveTeamExecution,
+  getTeamExecutions,
+  type TeamExecutionHistory,
+} from '@/lib/storage';
 
 interface PendingExchange {
   instanceId: string;
@@ -175,19 +182,153 @@ export function useInstanceManager() {
         loadInstances();
         break;
 
-      case 'team:step':
-      case 'team:complete':
-      case 'team:error':
+      case 'team:step': {
+        const phase = msg.payload.phase as string;
         setTeamLogs(prev => [
           ...prev,
           {
             teamId: msg.teamId || '',
-            message: msg.payload.message || msg.payload.error || '',
-            phase: msg.payload.phase || msg.type,
+            message: msg.payload.message || '',
+            phase,
             timestamp: msg.timestamp,
           },
         ]);
+
+        if (phase === 'planning') {
+          const execId = crypto.randomUUID();
+          activeTeamExecutionRef.current = {
+            id: execId,
+            teamId: msg.teamId || '',
+            teamName: msg.payload.teamName || '',
+            goal: msg.payload.goal || '',
+            steps: [],
+            status: 'running',
+            createdAt: msg.timestamp,
+          };
+        } else if (phase === 'planned' && activeTeamExecutionRef.current) {
+          activeTeamExecutionRef.current.plan = msg.payload.plan;
+        } else if (phase === 'step_start' && activeTeamExecutionRef.current) {
+          const existing = activeTeamExecutionRef.current.steps.find(s => s.step === msg.payload.step);
+          if (!existing) {
+            activeTeamExecutionRef.current.steps.push({
+              step: msg.payload.step,
+              role: msg.payload.role || '',
+              task: msg.payload.task || '',
+              instanceId: msg.payload.instanceId,
+              output: '',
+              status: 'running',
+              startedAt: msg.timestamp,
+            });
+          }
+        } else if (phase === 'step_done' && activeTeamExecutionRef.current) {
+          const stepRecord = activeTeamExecutionRef.current.steps.find(s => s.step === msg.payload.step);
+          if (stepRecord) {
+            stepRecord.output = msg.payload.output || '';
+            stepRecord.status = 'completed';
+            stepRecord.completedAt = msg.timestamp;
+            stepRecord.task = msg.payload.task || stepRecord.task;
+          } else {
+            activeTeamExecutionRef.current.steps.push({
+              step: msg.payload.step,
+              role: msg.payload.role || '',
+              task: msg.payload.task || '',
+              instanceId: msg.payload.instanceId,
+              output: msg.payload.output || '',
+              status: 'completed',
+              completedAt: msg.timestamp,
+            });
+          }
+        } else if (phase === 'step_error' && activeTeamExecutionRef.current) {
+          const stepRecord = activeTeamExecutionRef.current.steps.find(s => s.step === msg.payload.step);
+          if (stepRecord) {
+            stepRecord.status = 'failed';
+            stepRecord.completedAt = msg.timestamp;
+          } else {
+            activeTeamExecutionRef.current.steps.push({
+              step: msg.payload.step,
+              role: msg.payload.role || '',
+              task: msg.payload.task,
+              output: '',
+              status: 'failed',
+              completedAt: msg.timestamp,
+            });
+          }
+        } else if (phase === 'step_skip' && activeTeamExecutionRef.current) {
+          activeTeamExecutionRef.current.steps.push({
+            step: msg.payload.step,
+            role: msg.payload.role || '',
+            task: msg.payload.task,
+            output: '',
+            status: 'skipped',
+          });
+        }
         break;
+      }
+
+      case 'team:complete': {
+        setTeamLogs(prev => [
+          ...prev,
+          {
+            teamId: msg.teamId || '',
+            message: msg.payload.message || '',
+            phase: 'team:complete',
+            timestamp: msg.timestamp,
+          },
+        ]);
+
+        if (activeTeamExecutionRef.current) {
+          const exec = activeTeamExecutionRef.current;
+          exec.status = 'completed';
+          exec.completedAt = msg.timestamp;
+          if (msg.payload.goal) exec.goal = msg.payload.goal;
+          if (msg.payload.teamName) exec.teamName = msg.payload.teamName;
+
+          if (msg.payload.results) {
+            for (const r of msg.payload.results as Array<{ step: number; role: string; output: string }>) {
+              const existing = exec.steps.find(s => s.step === r.step);
+              if (existing) {
+                if (r.output) existing.output = r.output;
+              } else {
+                exec.steps.push({
+                  step: r.step,
+                  role: r.role || '',
+                  output: r.output || '',
+                  status: 'completed',
+                  completedAt: msg.timestamp,
+                });
+              }
+            }
+            exec.steps.sort((a, b) => a.step - b.step);
+          }
+
+          saveTeamExecution(exec);
+          setTeamExecutions(prev => [exec, ...prev.filter(e => e.id !== exec.id)]);
+          activeTeamExecutionRef.current = null;
+        }
+        break;
+      }
+
+      case 'team:error': {
+        setTeamLogs(prev => [
+          ...prev,
+          {
+            teamId: msg.teamId || '',
+            message: msg.payload.error || msg.payload.message || '',
+            phase: 'team:error',
+            timestamp: msg.timestamp,
+          },
+        ]);
+
+        if (activeTeamExecutionRef.current) {
+          const exec = activeTeamExecutionRef.current;
+          exec.status = 'failed';
+          exec.completedAt = msg.timestamp;
+          saveTeamExecution(exec);
+          setTeamExecutions(prev => [exec, ...prev.filter(e => e.id !== exec.id)]);
+          activeTeamExecutionRef.current = null;
+        }
+        break;
+      }
     }
   }, [loadInstances]);
 
@@ -223,6 +364,14 @@ export function useInstanceManager() {
   }, [connect, loadInstances]);
 
   const [teamLogs, setTeamLogs] = useState<Array<{ teamId: string; message: string; phase: string; timestamp: string }>>([]);
+  const activeTeamExecutionRef = useRef<TeamExecutionHistory | null>(null);
+  const [teamExecutions, setTeamExecutions] = useState<TeamExecutionHistory[]>(() => getTeamExecutions());
+
+  const clearTeamLogs = useCallback(() => setTeamLogs([]), []);
+
+  const refreshTeamExecutions = useCallback(() => {
+    setTeamExecutions(getTeamExecutions());
+  }, []);
 
   const dispatchTeamTask = useCallback((teamId: string, content: string) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
@@ -262,6 +411,9 @@ export function useInstanceManager() {
     dispatchTask,
     dispatchTeamTask,
     teamLogs,
+    clearTeamLogs,
+    teamExecutions,
+    refreshTeamExecutions,
     refreshInstances: loadInstances,
   };
 }
