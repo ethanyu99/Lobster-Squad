@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Eye, Clock, Users, Star, AlertCircle, Loader2 } from 'lucide-react';
 import { fetchShareView, createShareWebSocket } from '@/lib/api';
 import { TaskInput } from '@/components/TaskInput';
-import type { ShareViewData, InstancePublic, TeamPublic, WSMessage } from '@shared/types';
+import { ExecutionPanel } from '@/components/ExecutionPanel';
+import type { ShareViewData, InstancePublic, TeamPublic, WSMessage, TurnSummary } from '@shared/types';
+import type { ExecutionHistory, ExecutionTurnRecord, ExecutionEdgeRecord } from '@/lib/storage';
 
 interface ShareViewProps {
   token: string;
@@ -45,6 +47,18 @@ export function ShareView({ token }: ShareViewProps) {
   const [taskStreams, setTaskStreams] = useState<Record<string, string>>({});
   const [timeRemaining, setTimeRemaining] = useState('');
   const wsRef = useRef<WebSocket | null>(null);
+
+  const [executionLogs, setExecutionLogs] = useState<Array<{
+    executionId: string;
+    message: string;
+    type: string;
+    timestamp: string;
+    turnId?: string;
+    role?: string;
+  }>>([]);
+  const [executionStreams, setExecutionStreams] = useState<Record<string, string>>({});
+  const activeExecutionRef = useRef<ExecutionHistory | null>(null);
+  const [activeExecutionSnapshot, setActiveExecutionSnapshot] = useState<ExecutionHistory | null>(null);
 
   const loadShareData = useCallback(async () => {
     try {
@@ -139,6 +153,199 @@ export function ShareView({ token }: ShareViewProps) {
           delete next[msg.instanceId!];
           return next;
         });
+      }
+
+      if (msg.type === 'execution:started') {
+        const execId = msg.payload.executionId;
+        activeExecutionRef.current = {
+          id: execId,
+          teamId: msg.payload.teamId || msg.teamId || '',
+          teamName: msg.payload.teamName || '',
+          goal: msg.payload.goal || '',
+          turns: [],
+          edges: [],
+          status: 'running',
+          createdAt: msg.timestamp,
+        };
+        setActiveExecutionSnapshot({ ...activeExecutionRef.current });
+        setExecutionLogs(prev => [...prev, {
+          executionId: execId,
+          message: `Execution started: ${msg.payload.goal}`,
+          type: 'execution:started',
+          timestamp: msg.timestamp,
+        }]);
+      }
+
+      if (msg.type === 'execution:turn_start') {
+        const turn = msg.payload.turn as TurnSummary;
+        if (activeExecutionRef.current) {
+          const existing = activeExecutionRef.current.turns.find((t: ExecutionTurnRecord) => t.id === turn.id);
+          if (!existing) {
+            activeExecutionRef.current.turns.push({
+              id: turn.id,
+              seq: turn.seq,
+              role: turn.role,
+              instanceId: turn.instanceId,
+              task: turn.task,
+              output: '',
+              status: 'running',
+              depth: turn.depth,
+              parentTurnId: turn.parentTurnId,
+              startedAt: msg.timestamp,
+            });
+          }
+          setActiveExecutionSnapshot({ ...activeExecutionRef.current, turns: [...activeExecutionRef.current.turns] });
+        }
+        setExecutionLogs(prev => [...prev, {
+          executionId: msg.payload.executionId,
+          message: msg.payload.message || `Turn ${turn.seq}: ${turn.role} started`,
+          type: 'execution:turn_start',
+          timestamp: msg.timestamp,
+          turnId: turn.id,
+          role: turn.role,
+        }]);
+      }
+
+      if (msg.type === 'execution:turn_stream') {
+        const { turnId, chunk } = msg.payload;
+        setExecutionStreams(prev => ({
+          ...prev,
+          [turnId]: (prev[turnId] || '') + chunk,
+        }));
+        if (activeExecutionRef.current) {
+          const turnRec = activeExecutionRef.current.turns.find((t: ExecutionTurnRecord) => t.id === turnId);
+          if (turnRec) turnRec.output += chunk;
+        }
+        if (msg.instanceId) {
+          setTaskStreams(prev => ({
+            ...prev,
+            [msg.instanceId!]: (prev[msg.instanceId!] || '') + chunk,
+          }));
+        }
+      }
+
+      if (msg.type === 'execution:turn_complete') {
+        const turn = msg.payload.turn as TurnSummary;
+        if (activeExecutionRef.current) {
+          const turnRec = activeExecutionRef.current.turns.find((t: ExecutionTurnRecord) => t.id === turn.id);
+          if (turnRec) {
+            turnRec.status = 'completed';
+            turnRec.completedAt = msg.timestamp;
+            turnRec.durationMs = turn.durationMs;
+            turnRec.actionType = turn.actionType;
+            turnRec.actionSummary = turn.actionSummary;
+          }
+          setActiveExecutionSnapshot({ ...activeExecutionRef.current, turns: [...activeExecutionRef.current.turns] });
+        }
+        if (msg.instanceId) {
+          setTaskStreams(prev => {
+            const next = { ...prev };
+            delete next[msg.instanceId!];
+            return next;
+          });
+        }
+        setExecutionStreams(prev => {
+          const next = { ...prev };
+          delete next[turn.id];
+          return next;
+        });
+        setExecutionLogs(prev => [...prev, {
+          executionId: msg.payload.executionId,
+          message: `Turn ${turn.seq}: ${turn.role} completed${msg.payload.action ? ` → ${msg.payload.action.summary}` : ''}`,
+          type: 'execution:turn_complete',
+          timestamp: msg.timestamp,
+          turnId: turn.id,
+          role: turn.role,
+        }]);
+      }
+
+      if (msg.type === 'execution:turn_failed') {
+        const turn = msg.payload.turn as TurnSummary;
+        if (activeExecutionRef.current) {
+          const turnRec = activeExecutionRef.current.turns.find((t: ExecutionTurnRecord) => t.id === turn.id);
+          if (turnRec) {
+            turnRec.status = 'failed';
+            turnRec.completedAt = msg.timestamp;
+            turnRec.output = msg.payload.error || '';
+          }
+          setActiveExecutionSnapshot({ ...activeExecutionRef.current, turns: [...activeExecutionRef.current.turns] });
+        }
+        setExecutionLogs(prev => [...prev, {
+          executionId: msg.payload.executionId,
+          message: `Turn ${turn.seq}: ${turn.role} FAILED — ${msg.payload.error}`,
+          type: 'execution:turn_failed',
+          timestamp: msg.timestamp,
+          turnId: turn.id,
+          role: turn.role,
+        }]);
+      }
+
+      if (msg.type === 'execution:edge_created') {
+        if (activeExecutionRef.current) {
+          activeExecutionRef.current.edges.push({
+            from: msg.payload.from,
+            to: msg.payload.to,
+            actionType: msg.payload.actionType,
+          } as ExecutionEdgeRecord);
+          setActiveExecutionSnapshot({ ...activeExecutionRef.current, edges: [...activeExecutionRef.current.edges] });
+        }
+      }
+
+      if (msg.type === 'execution:warning') {
+        setExecutionLogs(prev => [...prev, {
+          executionId: msg.payload.executionId || '',
+          message: `WARNING: ${msg.payload.message}`,
+          type: 'execution:warning',
+          timestamp: msg.timestamp,
+        }]);
+      }
+
+      if (msg.type === 'execution:completed') {
+        if (activeExecutionRef.current) {
+          const exec = activeExecutionRef.current;
+          exec.status = 'completed';
+          exec.completedAt = msg.timestamp;
+          exec.summary = msg.payload.summary;
+          exec.graph = msg.payload.graph;
+          exec.metrics = msg.payload.metrics;
+          if (msg.payload.teamName) exec.teamName = msg.payload.teamName;
+          if (msg.payload.goal) exec.goal = msg.payload.goal;
+          setActiveExecutionSnapshot({ ...exec });
+          activeExecutionRef.current = null;
+        }
+        setExecutionLogs(prev => [...prev, {
+          executionId: msg.payload.executionId,
+          message: `Execution completed: ${msg.payload.summary}`,
+          type: 'execution:completed',
+          timestamp: msg.timestamp,
+        }]);
+      }
+
+      if (msg.type === 'execution:timeout') {
+        if (activeExecutionRef.current) {
+          const exec = activeExecutionRef.current;
+          exec.status = 'timeout';
+          exec.completedAt = msg.timestamp;
+          exec.graph = msg.payload.graph;
+          exec.metrics = msg.payload.metrics;
+          setActiveExecutionSnapshot({ ...exec });
+          activeExecutionRef.current = null;
+        }
+        setExecutionLogs(prev => [...prev, {
+          executionId: msg.payload.executionId,
+          message: `Execution TIMEOUT: ${msg.payload.message}`,
+          type: 'execution:timeout',
+          timestamp: msg.timestamp,
+        }]);
+      }
+
+      if (msg.type === 'team:error') {
+        setExecutionLogs(prev => [...prev, {
+          executionId: '',
+          message: `Team error: ${msg.payload.error || msg.payload.message || 'Unknown error'}`,
+          type: 'team:error',
+          timestamp: msg.timestamp,
+        }]);
       }
     });
 
@@ -436,6 +643,22 @@ export function ShareView({ token }: ShareViewProps) {
           )}
         </div>
       </div>
+
+      {/* Execution panel */}
+      {executionLogs.length > 0 && (
+        <ExecutionPanel
+          logs={executionLogs}
+          streams={executionStreams}
+          activeExecution={activeExecutionSnapshot}
+          latestExecution={activeExecutionSnapshot || undefined}
+          onClear={() => {
+            setExecutionLogs([]);
+            setExecutionStreams({});
+            setActiveExecutionSnapshot(null);
+          }}
+          onViewDetail={() => {}}
+        />
+      )}
 
       {/* Task input at bottom */}
       <TaskInput

@@ -188,7 +188,6 @@ export function ExecutionReportDialog({ execution, open, onOpenChange }: Executi
     ? Math.round((new Date(execution.completedAt).getTime() - new Date(execution.createdAt).getTime()) / 1000)
     : null;
 
-  const reportContent = execution.summary || findLeadFinalOutput(execution);
   const reportSource = execution.summary
     ? (execution.summary.length >= (findLeadFinalOutput(execution) || '').length ? execution.summary : findLeadFinalOutput(execution))
     : findLeadFinalOutput(execution);
