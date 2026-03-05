@@ -12,6 +12,7 @@ import { instanceRouter } from './routes/instances';
 import { taskRouter } from './routes/tasks';
 import { teamRouter } from './routes/teams';
 import { uploadRouter } from './routes/upload';
+import { instanceConfigRouter, teamConfigRouter } from './routes/sandbox-config';
 import { setupWebSocket } from './ws';
 import { authMiddleware } from './auth';
 import { initDB } from './db';
@@ -28,6 +29,8 @@ app.use(express.json());
 app.use('/api/instances', authMiddleware, instanceRouter);
 app.use('/api/tasks', authMiddleware, taskRouter);
 app.use('/api/teams', authMiddleware, teamRouter);
+app.use('/api/teams', authMiddleware, teamConfigRouter);
+app.use('/api/instances', authMiddleware, instanceConfigRouter);
 app.use('/api/upload', uploadRouter);
 
 // Serve locally uploaded files

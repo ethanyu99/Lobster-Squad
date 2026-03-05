@@ -1,0 +1,357 @@
+import { Router } from 'express';
+import { Sandbox } from 'novita-sandbox';
+import { store } from '../store';
+import type { Instance } from '../../../shared/types';
+
+export const instanceConfigRouter = Router();
+export const teamConfigRouter = Router();
+
+const SANDBOX_KEEP_ALIVE_MS = 50 * 365 * 24 * 3600 * 1000;
+
+async function connectSandbox(sandboxId: string, apiKey: string) {
+  return Sandbox.connect(sandboxId, {
+    apiKey,
+    timeoutMs: SANDBOX_KEEP_ALIVE_MS,
+  });
+}
+
+interface GitCredentialPayload {
+  pat: string;
+  username?: string;
+  gitName?: string;
+  gitEmail?: string;
+  host?: string;
+}
+
+interface GitConfigureResult {
+  instanceId: string;
+  instanceName: string;
+  success: boolean;
+  verified: boolean;
+  verifyMessage: string;
+  method: 'sandbox_sdk' | 'task';
+  error?: string;
+}
+
+function buildGitCredentialLine(pat: string, host: string, username: string) {
+  return `https://${username}:${pat}@${host}`;
+}
+
+// ── Strategy 1: Sandbox SDK (direct file write) ──
+
+async function configureGitViaSdk(
+  instance: Instance,
+  payload: GitCredentialPayload,
+): Promise<GitConfigureResult> {
+  const { pat, username, gitName, gitEmail, host } = payload;
+  const gitHost = host || 'github.com';
+  const gitUser = username || 'git';
+
+  try {
+    const sandbox = await connectSandbox(instance.sandboxId!, instance.apiKey!);
+
+    await sandbox.commands.run('git config --global credential.helper store', { timeoutMs: 10_000 });
+    await sandbox.files.write('/home/user/.git-credentials', buildGitCredentialLine(pat, gitHost, gitUser) + '\n');
+    await sandbox.commands.run('chmod 600 /home/user/.git-credentials', { timeoutMs: 10_000 });
+
+    if (gitName) await sandbox.commands.run(`git config --global user.name "${gitName}"`, { timeoutMs: 10_000 });
+    if (gitEmail) await sandbox.commands.run(`git config --global user.email "${gitEmail}"`, { timeoutMs: 10_000 });
+
+    let verified = false;
+    let verifyMessage = '';
+    try {
+      const result = await sandbox.commands.run(
+        `git ls-remote https://${gitUser}:${pat}@${gitHost} 2>&1 | head -1`,
+        { timeoutMs: 15_000 },
+      );
+      verified = !result.stderr?.includes('fatal');
+      verifyMessage = verified ? 'Authentication successful' : (result.stderr?.trim() || 'Verification failed');
+    } catch {
+      verifyMessage = 'Verification skipped (timeout)';
+    }
+
+    return { instanceId: instance.id, instanceName: instance.name, success: true, verified, verifyMessage, method: 'sandbox_sdk' };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error(`[instance-config] SDK configure failed for ${instance.name}:`, msg);
+    return { instanceId: instance.id, instanceName: instance.name, success: false, verified: false, verifyMessage: '', method: 'sandbox_sdk', error: msg };
+  }
+}
+
+// ── Strategy 2: Task dispatch (works for any instance) ──
+
+function buildGitConfigPrompt(payload: GitCredentialPayload): string {
+  const { pat, username, gitName, gitEmail, host } = payload;
+  const gitHost = host || 'github.com';
+  const gitUser = username || 'git';
+  const credLine = buildGitCredentialLine(pat, gitHost, gitUser);
+
+  const commands = [
+    'git config --global credential.helper store',
+    `printf '%s\\n' '${credLine}' > ~/.git-credentials`,
+    'chmod 600 ~/.git-credentials',
+  ];
+  if (gitName) commands.push(`git config --global user.name '${gitName}'`);
+  if (gitEmail) commands.push(`git config --global user.email '${gitEmail}'`);
+
+  return [
+    'Run these shell commands exactly as shown, one by one. Do not modify them.',
+    '',
+    '```bash',
+    ...commands,
+    '```',
+  ].join('\n');
+}
+
+function toHttpBase(endpoint: string): string {
+  return endpoint
+    .replace(/^ws:\/\//, 'http://')
+    .replace(/^wss:\/\//, 'https://')
+    .replace(/\/+$/, '');
+}
+
+async function configureGitViaTask(
+  instance: Instance,
+  payload: GitCredentialPayload,
+): Promise<GitConfigureResult> {
+  const prompt = buildGitConfigPrompt(payload);
+
+  try {
+    const baseUrl = toHttpBase(instance.endpoint);
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (instance.token) headers['Authorization'] = `Bearer ${instance.token}`;
+
+    const response = await fetch(`${baseUrl}/v1/responses`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ model: 'openclaw', input: prompt, stream: true }),
+      signal: AbortSignal.timeout(120_000),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => response.statusText);
+      return {
+        instanceId: instance.id, instanceName: instance.name,
+        success: false, verified: false, verifyMessage: '', method: 'task',
+        error: `HTTP ${response.status}: ${errText.slice(0, 200)}`,
+      };
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      return {
+        instanceId: instance.id, instanceName: instance.name,
+        success: false, verified: false, verifyMessage: '', method: 'task',
+        error: 'No response body',
+      };
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullText = '';
+    let completed = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const event = JSON.parse(data);
+          if (event.type === 'response.output_text.delta' && event.delta) fullText += event.delta;
+          if (event.type === 'response.completed') completed = true;
+        } catch { /* ignore */ }
+      }
+    }
+
+    const lowerText = fullText.toLowerCase();
+    const hasError = lowerText.includes('error') && (lowerText.includes('fatal') || lowerText.includes('failed'));
+    const verified = completed && !hasError;
+    return {
+      instanceId: instance.id, instanceName: instance.name,
+      success: completed, verified,
+      verifyMessage: verified ? 'Configuration task completed' : (hasError ? 'Task completed with errors' : 'Task did not complete'),
+      method: 'task',
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error(`[instance-config] Task configure failed for ${instance.name}:`, msg);
+    return {
+      instanceId: instance.id, instanceName: instance.name,
+      success: false, verified: false, verifyMessage: '', method: 'task', error: msg,
+    };
+  }
+}
+
+// ── Unified configure function ──
+
+async function configureGitForInstance(
+  instance: Instance,
+  payload: GitCredentialPayload,
+): Promise<GitConfigureResult> {
+  if (instance.sandboxId && instance.apiKey) {
+    return configureGitViaSdk(instance, payload);
+  }
+  if (instance.endpoint) {
+    return configureGitViaTask(instance, payload);
+  }
+  return {
+    instanceId: instance.id, instanceName: instance.name,
+    success: false, verified: false, verifyMessage: '', method: 'task',
+    error: 'Instance has no endpoint configured',
+  };
+}
+
+// ── Single instance git configure ──
+
+instanceConfigRouter.post('/:id/sandbox/configure/git', async (req, res) => {
+  const ownerId = req.userContext!.userId;
+  const instance = store.getInstanceRawForOwner(ownerId, req.params.id);
+  if (!instance) return res.status(404).json({ error: 'Instance not found' });
+
+  const payload = req.body as GitCredentialPayload;
+  if (!payload.pat) return res.status(400).json({ error: 'pat is required' });
+
+  const result = await configureGitForInstance(instance, payload);
+
+  if (!result.success) {
+    return res.status(500).json({ error: result.error });
+  }
+
+  res.json({
+    success: true,
+    method: result.method,
+    steps: ['git_credentials', ...(payload.gitName ? ['git_name'] : []), ...(payload.gitEmail ? ['git_email'] : [])],
+    verified: result.verified,
+    verifyMessage: result.verifyMessage,
+  });
+});
+
+instanceConfigRouter.get('/:id/sandbox/configure/git/status', async (req, res) => {
+  const ownerId = req.userContext!.userId;
+  const instance = store.getInstanceRawForOwner(ownerId, req.params.id);
+  if (!instance) return res.status(404).json({ error: 'Instance not found' });
+
+  if (instance.sandboxId && instance.apiKey) {
+    try {
+      const sandbox = await connectSandbox(instance.sandboxId, instance.apiKey);
+      const credResult = await sandbox.commands.run(
+        'test -f /home/user/.git-credentials && echo "exists" || echo "missing"',
+        { timeoutMs: 10_000 },
+      );
+      const hasCredentials = credResult.stdout?.trim() === 'exists';
+
+      let gitName = '';
+      let gitEmail = '';
+      try {
+        const nameResult = await sandbox.commands.run('git config --global user.name 2>/dev/null || true', { timeoutMs: 5_000 });
+        gitName = nameResult.stdout?.trim() || '';
+        const emailResult = await sandbox.commands.run('git config --global user.email 2>/dev/null || true', { timeoutMs: 5_000 });
+        gitEmail = emailResult.stdout?.trim() || '';
+      } catch { /* ignore */ }
+
+      return res.json({ hasCredentials, gitName, gitEmail, method: 'sandbox_sdk' });
+    } catch (err) {
+      return res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to check git status' });
+    }
+  }
+
+  // Non-sandbox: we can't probe status without dispatching a task (too expensive)
+  res.json({ hasCredentials: null, gitName: '', gitEmail: '', method: 'task' });
+});
+
+// ── Team-level batch git configure ──
+
+teamConfigRouter.post('/:id/configure/git', async (req, res) => {
+  const ownerId = req.userContext!.userId;
+  const team = store.getTeam(ownerId, req.params.id);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  const payload = req.body as GitCredentialPayload;
+  if (!payload.pat) return res.status(400).json({ error: 'pat is required' });
+
+  const instances = team.members
+    .map(m => m.instanceId)
+    .filter((id): id is string => !!id)
+    .map(id => store.getInstanceRawForOwner(ownerId, id))
+    .filter((inst): inst is Instance => !!inst && !!inst.endpoint);
+
+  if (instances.length === 0) {
+    return res.status(400).json({ error: 'No instances bound to this team' });
+  }
+
+  const results = await Promise.all(
+    instances.map(inst => configureGitForInstance(inst, payload)),
+  );
+
+  const succeeded = results.filter(r => r.success).length;
+  const failed = results.filter(r => !r.success).length;
+
+  res.json({ total: results.length, succeeded, failed, results });
+});
+
+teamConfigRouter.get('/:id/configure/git/status', async (req, res) => {
+  const ownerId = req.userContext!.userId;
+  const team = store.getTeam(ownerId, req.params.id);
+  if (!team) return res.status(404).json({ error: 'Team not found' });
+
+  const roleStatuses = await Promise.all(
+    team.roles.map(async role => {
+      const member = team.members.find(m => m.roleId === role.id);
+      const instanceId = member?.instanceId;
+
+      const base = { roleId: role.id, roleName: role.name, isLead: role.isLead };
+
+      if (!instanceId) {
+        return { ...base, instanceId: null, instanceName: null, isSandbox: false, hasCredentials: false as boolean | null, gitName: '', gitEmail: '', reason: 'unbound' as const };
+      }
+
+      const inst = store.getInstanceRawForOwner(ownerId, instanceId);
+      if (!inst) {
+        return { ...base, instanceId, instanceName: null, isSandbox: false, hasCredentials: false as boolean | null, gitName: '', gitEmail: '', reason: 'not_found' as const };
+      }
+
+      if (!inst.endpoint) {
+        return { ...base, instanceId: inst.id, instanceName: inst.name, isSandbox: false, hasCredentials: false as boolean | null, gitName: '', gitEmail: '', reason: 'no_endpoint' as const };
+      }
+
+      const isSandbox = !!(inst.sandboxId && inst.apiKey);
+
+      if (isSandbox) {
+        try {
+          const sandbox = await connectSandbox(inst.sandboxId!, inst.apiKey!);
+          const credResult = await sandbox.commands.run(
+            'test -f /home/user/.git-credentials && echo "exists" || echo "missing"',
+            { timeoutMs: 10_000 },
+          );
+          const hasCredentials = credResult.stdout?.trim() === 'exists';
+          let gitName = '';
+          let gitEmail = '';
+          try {
+            const nr = await sandbox.commands.run('git config --global user.name 2>/dev/null || true', { timeoutMs: 5_000 });
+            gitName = nr.stdout?.trim() || '';
+            const er = await sandbox.commands.run('git config --global user.email 2>/dev/null || true', { timeoutMs: 5_000 });
+            gitEmail = er.stdout?.trim() || '';
+          } catch { /* ignore */ }
+          return { ...base, instanceId: inst.id, instanceName: inst.name, isSandbox: true, hasCredentials, gitName, gitEmail, reason: null };
+        } catch {
+          return { ...base, instanceId: inst.id, instanceName: inst.name, isSandbox: true, hasCredentials: false as boolean | null, gitName: '', gitEmail: '', reason: 'connection_failed' as const };
+        }
+      }
+
+      // Non-sandbox: can't cheaply check status
+      return { ...base, instanceId: inst.id, instanceName: inst.name, isSandbox: false, hasCredentials: null, gitName: '', gitEmail: '', reason: null };
+    }),
+  );
+
+  const configurable = roleStatuses.filter(r => r.reason === null).length;
+  const configured = roleStatuses.filter(r => r.hasCredentials === true).length;
+
+  res.json({ totalRoles: team.roles.length, configurable, configured, roleStatuses });
+});

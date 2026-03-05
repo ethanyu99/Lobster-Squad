@@ -271,6 +271,111 @@ export async function unbindInstance(teamId: string, instanceId: string): Promis
   return res.json();
 }
 
+// ── Sandbox Config API ───────────────
+
+export interface GitConfigPayload {
+  pat: string;
+  username?: string;
+  gitName?: string;
+  gitEmail?: string;
+  host?: string;
+}
+
+export interface GitConfigResult {
+  success: boolean;
+  steps: string[];
+  verified: boolean;
+  verifyMessage: string;
+}
+
+export interface GitStatusResult {
+  hasCredentials: boolean;
+  gitName: string;
+  gitEmail: string;
+}
+
+export async function configureSandboxGit(instanceId: string, data: GitConfigPayload): Promise<GitConfigResult> {
+  const res = await fetch(`${API_BASE}/instances/${instanceId}/sandbox/configure/git`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Failed to configure git' }));
+    throw new Error(body.error || 'Failed to configure git');
+  }
+  return res.json();
+}
+
+export interface TeamGitConfigResult {
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: {
+    instanceId: string;
+    instanceName: string;
+    success: boolean;
+    verified: boolean;
+    verifyMessage: string;
+    error?: string;
+  }[];
+}
+
+export interface TeamRoleGitStatus {
+  roleId: string;
+  roleName: string;
+  isLead: boolean;
+  instanceId: string | null;
+  instanceName: string | null;
+  isSandbox: boolean;
+  hasCredentials: boolean | null;
+  gitName: string;
+  gitEmail: string;
+  reason: 'unbound' | 'not_found' | 'no_endpoint' | 'connection_failed' | null;
+}
+
+export interface TeamGitStatusResult {
+  totalRoles: number;
+  configurable: number;
+  configured: number;
+  roleStatuses: TeamRoleGitStatus[];
+}
+
+export async function configureTeamGit(teamId: string, data: GitConfigPayload): Promise<TeamGitConfigResult> {
+  const res = await fetch(`${API_BASE}/teams/${teamId}/configure/git`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Failed to configure team git' }));
+    throw new Error(body.error || 'Failed to configure team git');
+  }
+  return res.json();
+}
+
+export async function getTeamGitStatus(teamId: string): Promise<TeamGitStatusResult> {
+  const res = await fetch(`${API_BASE}/teams/${teamId}/configure/git/status`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Failed to check team git status' }));
+    throw new Error(body.error || 'Failed to check team git status');
+  }
+  return res.json();
+}
+
+export async function getSandboxGitStatus(instanceId: string): Promise<GitStatusResult> {
+  const res = await fetch(`${API_BASE}/instances/${instanceId}/sandbox/configure/git/status`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Failed to check git status' }));
+    throw new Error(body.error || 'Failed to check git status');
+  }
+  return res.json();
+}
+
 export function createWebSocket(onMessage: (msg: WSMessage) => void): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const userId = getUserId();

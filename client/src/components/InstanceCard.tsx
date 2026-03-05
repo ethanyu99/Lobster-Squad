@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Trash2, RefreshCw, Cloud, Edit2, ExternalLink, Star } from 'lucide-react';
+import { Trash2, RefreshCw, Cloud, Edit2, ExternalLink, Star, Settings } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,7 @@ import type { InstancePublic } from '@shared/types';
 import { deleteInstance, checkHealth, updateInstance } from '@/lib/api';
 import { getExchangeById } from '@/lib/storage';
 import { SessionDetailDialog } from '@/components/SessionDetailDialog';
+import { SandboxConfigDialog } from '@/components/SandboxConfigDialog';
 
 interface InstanceCardProps {
   instance: InstancePublic;
@@ -32,6 +33,7 @@ const statusBadgeVariant: Record<string, 'default' | 'secondary' | 'destructive'
 
 export function InstanceCard({ instance, taskStream, onRefresh }: InstanceCardProps) {
   const [detailOpen, setDetailOpen] = useState(false);
+  const [configOpen, setConfigOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState(instance.name);
   const [editDesc, setEditDesc] = useState(instance.description || '');
@@ -134,6 +136,15 @@ export function InstanceCard({ instance, taskStream, onRefresh }: InstanceCardPr
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 hover:bg-muted"
+                onClick={(e) => { e.stopPropagation(); setConfigOpen(true); }}
+                title="Instance Configuration"
+              >
+                <Settings className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 hover:bg-muted"
                 onClick={(e) => {
                   e.stopPropagation();
                   setEditName(instance.name);
@@ -224,6 +235,12 @@ export function InstanceCard({ instance, taskStream, onRefresh }: InstanceCardPr
         session={sessionForTask}
         open={detailOpen}
         onOpenChange={setDetailOpen}
+      />
+
+      <SandboxConfigDialog
+        instance={instance}
+        open={configOpen}
+        onOpenChange={setConfigOpen}
       />
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
