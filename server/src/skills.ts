@@ -106,6 +106,36 @@ export async function batchUninstallSkills(
 }
 
 /**
+ * Install a remote skill (from SkillsMP or any URL) directly by providing
+ * its SKILL.md content. The skill is NOT in the local registry.
+ */
+export async function installRemoteSkillToSandbox(
+  sandboxId: string,
+  apiKey: string,
+  instanceId: string,
+  skillId: string,
+  skillName: string,
+  skillMdContent: string,
+): Promise<SkillInstallResult> {
+  try {
+    const sandbox = await connectSandbox(sandboxId, apiKey);
+
+    const safeName = skillName.replace(/[^a-zA-Z0-9_-]/g, '-');
+    const skillDir = `${SKILLS_BASE_PATH}/${safeName}`;
+    await sandbox.commands.run(`mkdir -p ${skillDir}`, { timeoutMs: 10_000 });
+    await sandbox.files.write(`${skillDir}/SKILL.md`, skillMdContent);
+
+    await saveInstanceSkill(instanceId, skillId);
+    console.log(`[skills] Installed remote skill "${safeName}" to instance ${instanceId}`);
+    return { skillId, instanceId, success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    console.error(`[skills] Failed to install remote skill "${skillName}" to instance ${instanceId}:`, msg);
+    return { skillId, instanceId, success: false, error: msg };
+  }
+}
+
+/**
  * Probe which skills are actually present in the sandbox filesystem.
  * Compares against the registry to return the list of found skill IDs.
  */

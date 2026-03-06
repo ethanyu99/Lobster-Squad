@@ -572,6 +572,87 @@ export async function uninstallSkills(instanceId: string, skillIds: string[]): P
   return res.json();
 }
 
+// ── Remote Skills (SkillsMP) ─────────
+
+export interface RemoteSkill {
+  slug: string;
+  name: string;
+  description: string;
+  author: string;
+  repo: string;
+  stars: number;
+  updatedAt: string;
+  githubUrl: string;
+  skillUrl: string;
+}
+
+export type SkillsMPErrorCode =
+  | 'MISSING_API_KEY' | 'INVALID_API_KEY' | 'MISSING_QUERY'
+  | 'DAILY_QUOTA_EXCEEDED' | 'INTERNAL_ERROR' | 'NOT_CONFIGURED' | 'NETWORK_ERROR';
+
+export class SkillsMPApiError extends Error {
+  code: SkillsMPErrorCode;
+  status: number;
+  constructor(code: SkillsMPErrorCode, message: string, status: number) {
+    super(message);
+    this.code = code;
+    this.status = status;
+  }
+}
+
+export async function checkRemoteStatus(): Promise<{ configured: boolean }> {
+  const res = await fetch(`${API_BASE}/skills/remote/status`, { headers: authHeaders() });
+  if (!res.ok) return { configured: false };
+  return res.json();
+}
+
+export async function searchRemoteSkills(
+  query: string,
+  mode: 'keyword' | 'ai' = 'keyword',
+): Promise<{ skills: RemoteSkill[]; total: number; query: string }> {
+  const res = await fetch(
+    `${API_BASE}/skills/remote/search?q=${encodeURIComponent(query)}&mode=${mode}`,
+    { headers: authHeaders() },
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Remote search failed', code: 'INTERNAL_ERROR' }));
+    throw new SkillsMPApiError(
+      (body.code as SkillsMPErrorCode) || 'INTERNAL_ERROR',
+      body.error || 'Remote search failed',
+      res.status,
+    );
+  }
+  return res.json();
+}
+
+export async function fetchRemoteSkillContent(githubUrl: string): Promise<string> {
+  const res = await fetch(
+    `${API_BASE}/skills/remote/content?url=${encodeURIComponent(githubUrl)}`,
+    { headers: authHeaders() },
+  );
+  if (!res.ok) throw new Error('Could not fetch remote SKILL.md');
+  return res.text();
+}
+
+export async function installRemoteSkill(
+  instanceId: string,
+  slug: string,
+  name: string,
+  githubUrl?: string,
+  skillMd?: string,
+): Promise<SkillInstallResult> {
+  const res = await fetch(`${API_BASE}/skills/instance/${instanceId}/install-remote`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ slug, name, rawUrl: githubUrl, skillMd }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Failed to install remote skill' }));
+    throw new Error(body.error || 'Failed to install remote skill');
+  }
+  return res.json();
+}
+
 export async function fetchSkillReadme(skillId: string): Promise<string> {
   const res = await fetch(`${API_BASE}/skills/${skillId}/readme`, {
     headers: authHeaders(),
