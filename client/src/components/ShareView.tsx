@@ -533,8 +533,8 @@ export function ShareView({ token }: ShareViewProps) {
                       <div className="ml-3 shrink-0">
                         {boundInstance ? (
                           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5 border border-primary/20">
-                            <span className={`w-2 h-2 rounded-full ${statusColor[boundInstance.status]}`} />
-                            <span className="text-xs font-medium truncate max-w-[80px]">{boundInstance.name}</span>
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${statusColor[boundInstance.status]}`} />
+                            <span className="text-xs font-medium break-all">{boundInstance.name}</span>
                           </div>
                         ) : (
                           <Badge variant="outline" className="text-[10px] text-muted-foreground">Unbound</Badge>
@@ -548,38 +548,40 @@ export function ShareView({ token }: ShareViewProps) {
           )}
 
           {/* Instances grid */}
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+          <div className={`grid gap-4 ${
+            instances.length === 1
+              ? 'grid-cols-1 max-w-xl mx-auto'
+              : 'grid-cols-2 xl:grid-cols-3'
+          }`}>
             {instances.map(instance => (
               <Card key={instance.id} className="bg-card border-border/80 shadow-sm hover:border-primary/40 hover:shadow-md transition-all duration-200">
                 <CardHeader className="pb-3 border-b border-border/40 bg-muted/20 overflow-hidden">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className={`inline-block w-2.5 h-2.5 rounded-full shadow-sm shrink-0 ${statusColor[instance.status]}`} />
-                      <CardTitle className="text-base font-semibold tracking-tight truncate">{instance.name}</CardTitle>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-                      {instance.role && (
-                        <Badge
-                          variant="outline"
-                          className={`text-[10px] tracking-wider font-semibold gap-1 whitespace-nowrap ${
-                            instance.role.isLead
-                              ? 'text-amber-600 border-amber-200 bg-amber-50/50'
-                              : 'text-violet-600 border-violet-200 bg-violet-50/50'
-                          }`}
-                        >
-                          {instance.role.isLead && <Star className="h-2.5 w-2.5" />}
-                          {instance.role.name}
-                        </Badge>
-                      )}
-                      {instance.sandboxId && (
-                        <Badge variant="outline" className="text-[10px] uppercase tracking-wider font-semibold gap-1 text-blue-600 border-blue-200 bg-blue-50/50 whitespace-nowrap">
-                          Sandbox
-                        </Badge>
-                      )}
-                      <Badge variant={statusBadgeVariant[instance.status]} className="text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap">
-                        {instance.status}
+                  <div className="flex items-center gap-2.5 mb-1.5">
+                    <span className={`inline-block w-2.5 h-2.5 rounded-full shadow-sm shrink-0 ${statusColor[instance.status]}`} />
+                    <CardTitle className="text-base font-semibold tracking-tight break-words">{instance.name}</CardTitle>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {instance.role && (
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] tracking-wider font-semibold gap-1 whitespace-nowrap ${
+                          instance.role.isLead
+                            ? 'text-amber-600 border-amber-200 bg-amber-50/50'
+                            : 'text-violet-600 border-violet-200 bg-violet-50/50'
+                        }`}
+                      >
+                        {instance.role.isLead && <Star className="h-2.5 w-2.5" />}
+                        {instance.role.name}
                       </Badge>
-                    </div>
+                    )}
+                    {instance.sandboxId && (
+                      <Badge variant="outline" className="text-[10px] uppercase tracking-wider font-semibold gap-1 text-blue-600 border-blue-200 bg-blue-50/50 whitespace-nowrap">
+                        Sandbox
+                      </Badge>
+                    )}
+                    <Badge variant={statusBadgeVariant[instance.status]} className="text-[10px] uppercase tracking-wider font-semibold whitespace-nowrap">
+                      {instance.status}
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="pt-4">
@@ -666,6 +668,7 @@ export function ShareView({ token }: ShareViewProps) {
         teams={teams}
         onDispatch={handleDispatchTask}
         onTeamDispatch={handleTeamDispatch}
+        shareMode
       />
     </div>
   );

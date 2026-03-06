@@ -10,6 +10,7 @@ interface TaskInputProps {
   teams?: TeamPublic[];
   onDispatch: (instanceId: string, content: string, instanceName: string, newSession?: boolean, imageUrls?: string[]) => void;
   onTeamDispatch?: (teamId: string, content: string, newSession?: boolean) => void;
+  shareMode?: boolean;
 }
 
 interface PastedImage {
@@ -42,7 +43,7 @@ function isTeamOption(item: SuggestionItem): item is TeamOption {
   return item.id.startsWith(TEAM_PREFIX);
 }
 
-export function TaskInput({ instances, teams = [], onDispatch, onTeamDispatch }: TaskInputProps) {
+export function TaskInput({ instances, teams = [], onDispatch, onTeamDispatch, shareMode = false }: TaskInputProps) {
   const [value, setValue] = useState('');
   const [targetInstances, setTargetInstances] = useState<InstancePublic[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamPublic | null>(null);
@@ -52,6 +53,13 @@ export function TaskInput({ instances, teams = [], onDispatch, onTeamDispatch }:
   const [images, setImages] = useState<PastedImage[]>([]);
   const [uploading, setUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-select single instance in share mode (no teams available)
+  useEffect(() => {
+    if (shareMode && teams.length === 0 && instances.length === 1 && targetInstances.length === 0 && !selectedTeam) {
+      setTargetInstances([instances[0]]);
+    }
+  }, [shareMode, teams.length, instances, targetInstances.length, selectedTeam]);
 
   useEffect(() => {
     if (!value.startsWith('@')) {
@@ -79,12 +87,14 @@ export function TaskInput({ instances, teams = [], onDispatch, onTeamDispatch }:
       }
     }
 
-    if (!selectedTeam && available.length > 1 && (!partial || 'all'.startsWith(partial))) {
-      items.push({ id: ALL_OPTION_ID, name: 'all' });
-    }
+    if (!shareMode) {
+      if (!selectedTeam && available.length > 1 && (!partial || 'all'.startsWith(partial))) {
+        items.push({ id: ALL_OPTION_ID, name: 'all' });
+      }
 
-    if (!selectedTeam) {
-      items.push(...filtered);
+      if (!selectedTeam) {
+        items.push(...filtered);
+      }
     }
 
     setSuggestions(items);
