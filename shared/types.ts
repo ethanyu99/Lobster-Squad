@@ -482,3 +482,18 @@ export interface InstanceSkillsInfo {
   instanceId: string;
   skills: Array<SkillDefinition & { installedAt: string }>;
 }
+
+// ──────────────────────────────────────
+// Sandbox File Browser
+// ──────────────────────────────────────
+
+export type SandboxFileType = 'file' | 'dir';
+
+export interface SandboxFileEntry {
+  name: string;
+  path: string;
+  type: SandboxFileType;
+  size: number;
+  permissions: string;
+  modifiedTime?: string;
+}

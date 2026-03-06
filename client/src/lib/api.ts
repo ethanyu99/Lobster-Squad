@@ -653,6 +653,53 @@ export async function installRemoteSkill(
   return res.json();
 }
 
+// ── Sandbox Files API ────────────────
+
+export interface SandboxFileListResult {
+  path: string;
+  files: import('@shared/types').SandboxFileEntry[];
+}
+
+export interface SandboxFileReadResult {
+  path: string;
+  content: string;
+  size: number;
+}
+
+export async function listSandboxFiles(
+  instanceId: string,
+  dirPath?: string,
+  opts?: { depth?: number; hidden?: boolean },
+): Promise<SandboxFileListResult> {
+  const params = new URLSearchParams();
+  if (dirPath) params.set('path', dirPath);
+  if (opts?.depth) params.set('depth', String(opts.depth));
+  if (opts?.hidden) params.set('hidden', 'true');
+  const res = await fetch(`${API_BASE}/instances/${instanceId}/sandbox/files?${params}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Failed to list files' }));
+    throw new Error(body.error || 'Failed to list files');
+  }
+  return res.json();
+}
+
+export async function readSandboxFile(
+  instanceId: string,
+  filePath: string,
+): Promise<SandboxFileReadResult> {
+  const params = new URLSearchParams({ path: filePath });
+  const res = await fetch(`${API_BASE}/instances/${instanceId}/sandbox/files/read?${params}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Failed to read file' }));
+    throw new Error(body.error || 'Failed to read file');
+  }
+  return res.json();
+}
+
 export async function fetchSkillReadme(skillId: string): Promise<string> {
   const res = await fetch(`${API_BASE}/skills/${skillId}/readme`, {
     headers: authHeaders(),

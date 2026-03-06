@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Trash2, RefreshCw, Cloud, Edit2, ExternalLink, Star, Settings, Share2, XCircle, Package } from 'lucide-react';
+import { Trash2, RefreshCw, Cloud, Edit2, ExternalLink, Star, Settings, Share2, XCircle, Package, FolderOpen } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +13,7 @@ import { SessionDetailDialog } from '@/components/SessionDetailDialog';
 import { SandboxConfigDialog } from '@/components/SandboxConfigDialog';
 import { ShareDialog } from '@/components/ShareDialog';
 import { SkillsManagerDialog } from '@/components/SkillsManagerDialog';
+import { FileBrowserDialog } from '@/components/FileBrowserDialog';
 
 interface InstanceCardProps {
   instance: InstancePublic;
@@ -39,6 +40,7 @@ export function InstanceCard({ instance, taskStream, onRefresh, onCancelTask }: 
   const [editOpen, setEditOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
+  const [filesOpen, setFilesOpen] = useState(false);
   const [editName, setEditName] = useState(instance.name);
   const [editDesc, setEditDesc] = useState(instance.description || '');
   const [saving, setSaving] = useState(false);
@@ -130,7 +132,7 @@ export function InstanceCard({ instance, taskStream, onRefresh, onCancelTask }: 
               </Badge>
             </div>
           </div>
-          <div className="flex items-center gap-1 mt-1.5">
+          <div className="flex items-center gap-1 mt-1.5 flex-wrap">
             <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-muted" onClick={handleHealth} title="Refresh">
               <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
             </Button>
@@ -152,6 +154,17 @@ export function InstanceCard({ instance, taskStream, onRefresh, onCancelTask }: 
                 title="Skills"
               >
                 <Package className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
+            )}
+            {instance.sandboxId && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 hover:bg-muted"
+                onClick={(e) => { e.stopPropagation(); setFilesOpen(true); }}
+                title="Files"
+              >
+                <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
             )}
             <Button
@@ -335,6 +348,12 @@ export function InstanceCard({ instance, taskStream, onRefresh, onCancelTask }: 
         instance={instance}
         open={skillsOpen}
         onOpenChange={setSkillsOpen}
+      />
+
+      <FileBrowserDialog
+        instance={instance}
+        open={filesOpen}
+        onOpenChange={setFilesOpen}
       />
     </>
   );
