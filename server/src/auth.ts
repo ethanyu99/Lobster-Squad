@@ -14,16 +14,19 @@ declare global {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'openclaw-default-jwt-secret';
+function getJwtSecret(): string {
+  return process.env.JWT_SECRET || 'openclaw-default-jwt-secret';
+}
+
 const JWT_EXPIRES_IN = '30d';
 
 export function signToken(payload: { userId: string; email: string }): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
 }
 
 export function verifyToken(token: string): { userId: string; email: string } | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as { userId: string; email: string };
+    return jwt.verify(token, getJwtSecret()) as { userId: string; email: string };
   } catch {
     return null;
   }
