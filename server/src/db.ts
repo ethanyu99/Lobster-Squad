@@ -158,7 +158,17 @@ async function migrate() {
     );
   `);
 
-  // Step 9: Create indexes (after all columns exist)
+  // Step 9: Instance skills table
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS instance_skills (
+      instance_id UUID NOT NULL REFERENCES instances(id) ON DELETE CASCADE,
+      skill_id VARCHAR(255) NOT NULL,
+      installed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (instance_id, skill_id)
+    );
+  `);
+
+  // Step 10: Create indexes (after all columns exist)
   await p.query(`
     CREATE INDEX IF NOT EXISTS idx_teams_owner_id ON teams(owner_id);
     CREATE INDEX IF NOT EXISTS idx_roles_team_id ON roles(team_id);
@@ -175,6 +185,8 @@ async function migrate() {
     CREATE INDEX IF NOT EXISTS idx_tasks_session_key ON tasks(session_key);
     CREATE INDEX IF NOT EXISTS idx_executions_owner_id ON executions(owner_id);
     CREATE INDEX IF NOT EXISTS idx_executions_team_id ON executions(team_id);
+    CREATE INDEX IF NOT EXISTS idx_instance_skills_instance ON instance_skills(instance_id);
+    CREATE INDEX IF NOT EXISTS idx_instance_skills_skill ON instance_skills(skill_id);
   `);
 
   console.log('[db] Migration complete');

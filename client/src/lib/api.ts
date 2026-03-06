@@ -1,4 +1,4 @@
-import type { InstancePublic, TaskSummary, WSMessage, InstanceStats, SandboxProgress, SandboxSSEEvent, TeamPublic, TeamTemplate, ClawRole, ShareToken, ShareDuration, ShareViewData, SessionRecord, SessionDetail, ExecutionRecord } from '@shared/types';
+import type { InstancePublic, TaskSummary, WSMessage, InstanceStats, SandboxProgress, SandboxSSEEvent, TeamPublic, TeamTemplate, ClawRole, ShareToken, ShareDuration, ShareViewData, SessionRecord, SessionDetail, ExecutionRecord, SkillDefinition, SkillInstallResult } from '@shared/types';
 import { getUserId, getAuthToken, type AuthUser } from './user';
 
 const API_BASE = '/api';
@@ -224,8 +224,8 @@ export async function addRoleToTeam(teamId: string, role: Omit<ClawRole, 'id'>):
     body: JSON.stringify(role),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: '添加角色失败' }));
-    throw new Error(body.error || '添加角色失败');
+    const body = await res.json().catch(() => ({ error: 'Failed to add role' }));
+    throw new Error(body.error || 'Failed to add role');
   }
   return res.json();
 }
@@ -237,8 +237,8 @@ export async function updateRole(teamId: string, roleId: string, data: Partial<O
     body: JSON.stringify(data),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: '更新角色失败' }));
-    throw new Error(body.error || '更新角色失败');
+    const body = await res.json().catch(() => ({ error: 'Failed to update role' }));
+    throw new Error(body.error || 'Failed to update role');
   }
   return res.json();
 }
@@ -249,8 +249,8 @@ export async function deleteRole(teamId: string, roleId: string): Promise<TeamPu
     headers: authHeaders(),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: '删除角色失败' }));
-    throw new Error(body.error || '删除角色失败');
+    const body = await res.json().catch(() => ({ error: 'Failed to delete role' }));
+    throw new Error(body.error || 'Failed to delete role');
   }
   return res.json();
 }
@@ -524,6 +524,52 @@ export async function clearExecutionsApi(): Promise<void> {
     headers: authHeaders(),
   });
   if (!res.ok) throw new Error('Failed to clear executions');
+}
+
+// ── Skills API ────────────────────────
+
+export async function fetchSkillRegistry(): Promise<{ skills: SkillDefinition[] }> {
+  const res = await fetch(`${API_BASE}/skills`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Failed to fetch skills');
+  return res.json();
+}
+
+export async function searchSkillsApi(query: string): Promise<{ skills: SkillDefinition[] }> {
+  const res = await fetch(`${API_BASE}/skills/search?q=${encodeURIComponent(query)}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Failed to search skills');
+  return res.json();
+}
+
+export async function fetchInstanceSkills(instanceId: string): Promise<{ instanceId: string; skills: Array<SkillDefinition & { installedAt: string }> }> {
+  const res = await fetch(`${API_BASE}/skills/instance/${instanceId}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error('Failed to fetch instance skills');
+  return res.json();
+}
+
+export async function installSkills(instanceId: string, skillIds: string[]): Promise<{ total: number; succeeded: number; failed: number; results: SkillInstallResult[] }> {
+  const res = await fetch(`${API_BASE}/skills/instance/${instanceId}/install`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ skillIds }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Failed to install skills' }));
+    throw new Error(body.error || 'Failed to install skills');
+  }
+  return res.json();
+}
+
+export async function uninstallSkills(instanceId: string, skillIds: string[]): Promise<{ total: number; succeeded: number; failed: number; results: SkillInstallResult[] }> {
+  const res = await fetch(`${API_BASE}/skills/instance/${instanceId}/uninstall`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ skillIds }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: 'Failed to uninstall skills' }));
+    throw new Error(body.error || 'Failed to uninstall skills');
+  }
+  return res.json();
 }
 
 // ── Auth API ──────────────────────────

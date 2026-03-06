@@ -80,6 +80,10 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !endpoint.trim()) return;
+    if (name.trim().length > 10) {
+      setError('Name must be 10 characters or less');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -102,6 +106,10 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
   const handleSandboxSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sandboxName.trim() || !apiKey.trim()) return;
+    if (sandboxName.trim().length > 10) {
+      setError('Name must be 10 characters or less');
+      return;
+    }
     setLoading(true);
     setError('');
     setProgressSteps([]);
@@ -177,6 +185,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
                 value={sandboxName}
                 onChange={e => setSandboxName(e.target.value)}
                 required
+                maxLength={10}
                 disabled={loading}
               />
             </div>
@@ -239,6 +248,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
                 value={name}
                 onChange={e => setName(e.target.value)}
                 required
+                maxLength={10}
                 disabled={loading}
               />
             </div>

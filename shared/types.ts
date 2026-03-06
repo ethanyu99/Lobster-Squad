@@ -424,3 +424,61 @@ export interface WSLogEntry {
   summary: string;
   raw: string;
 }
+
+// ──────────────────────────────────────
+// Skills
+// ──────────────────────────────────────
+
+export interface SkillDefinition {
+  id: string;
+  name: string;
+  description: string;
+  author: string;
+  category: SkillCategory;
+  tags: string[];
+  /** Full SKILL.md content to write into the sandbox */
+  skillMd: string;
+  /** Extra files to write (relative path → content) */
+  extraFiles?: Record<string, string>;
+  metadata?: {
+    homepage?: string;
+    emoji?: string;
+    requires?: {
+      bins?: string[];
+      env?: string[];
+      config?: string[];
+    };
+    primaryEnv?: string;
+  };
+}
+
+export type SkillCategory =
+  | 'coding'
+  | 'search'
+  | 'browser'
+  | 'media'
+  | 'devops'
+  | 'data'
+  | 'communication'
+  | 'productivity'
+  | 'other';
+
+export interface InstanceSkill {
+  instanceId: string;
+  skillId: string;
+  installedAt: string;
+}
+
+export type SkillInstallStatus = 'installing' | 'installed' | 'uninstalling' | 'failed';
+
+export interface SkillInstallResult {
+  skillId: string;
+  instanceId: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface InstanceSkillsInfo {
+  instanceId: string;
+  skills: Array<SkillDefinition & { installedAt: string }>;
+}

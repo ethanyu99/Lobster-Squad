@@ -65,7 +65,7 @@ export function CreateTeamDialog({ onCreated }: CreateTeamDialogProps) {
 
   const handleSubmit = async () => {
     if (!teamName.trim()) {
-      setError('请输入团队名称');
+      setError('Team name is required');
       return;
     }
 
@@ -75,7 +75,7 @@ export function CreateTeamDialog({ onCreated }: CreateTeamDialogProps) {
     try {
       if (mode === 'template') {
         if (!selectedTemplate) {
-          setError('请选择一个模板');
+          setError('Please select a template');
           setLoading(false);
           return;
         }
@@ -87,12 +87,12 @@ export function CreateTeamDialog({ onCreated }: CreateTeamDialogProps) {
       } else {
         const validRoles = customRoles.filter(r => r.name.trim());
         if (validRoles.length < 2) {
-          setError('至少需要 2 个角色');
+          setError('At least 2 roles are required');
           setLoading(false);
           return;
         }
         if (!validRoles.some(r => r.isLead)) {
-          setError('至少需要一个 Lead 角色');
+          setError('At least one Lead role is required');
           setLoading(false);
           return;
         }
@@ -149,12 +149,12 @@ export function CreateTeamDialog({ onCreated }: CreateTeamDialogProps) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>创建团队</DialogTitle>
+          <DialogTitle>Create Team</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>团队名称</Label>
+            <Label>Team Name</Label>
             <Input
               placeholder="My Team"
               value={teamName}
@@ -163,9 +163,9 @@ export function CreateTeamDialog({ onCreated }: CreateTeamDialogProps) {
             />
           </div>
           <div className="space-y-2">
-            <Label>描述</Label>
+            <Label>Description</Label>
             <Input
-              placeholder="团队描述（可选）"
+              placeholder="Team description (optional)"
               value={teamDesc}
               onChange={e => setTeamDesc(e.target.value)}
               disabled={loading}
@@ -180,7 +180,7 @@ export function CreateTeamDialog({ onCreated }: CreateTeamDialogProps) {
               onClick={() => setMode('template')}
               disabled={loading}
             >
-              从模板创建
+              From Template
             </Button>
             <Button
               variant={mode === 'custom' ? 'default' : 'outline'}
@@ -189,7 +189,7 @@ export function CreateTeamDialog({ onCreated }: CreateTeamDialogProps) {
               onClick={() => setMode('custom')}
               disabled={loading}
             >
-              自定义角色
+              Custom Roles
             </Button>
           </div>
 
@@ -208,7 +208,7 @@ export function CreateTeamDialog({ onCreated }: CreateTeamDialogProps) {
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="font-semibold text-sm">{tmpl.name}</span>
                     {selectedTemplate === tmpl.id && (
-                      <Badge variant="default" className="text-[10px]">已选择</Badge>
+                      <Badge variant="default" className="text-[10px]">Selected</Badge>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mb-2">{tmpl.description}</p>
@@ -234,7 +234,7 @@ export function CreateTeamDialog({ onCreated }: CreateTeamDialogProps) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Input
-                        placeholder="角色名称"
+                        placeholder="Role name"
                         value={role.name}
                         onChange={e => updateCustomRole(index, 'name', e.target.value)}
                         className="h-8 w-32 text-sm"
@@ -267,14 +267,14 @@ export function CreateTeamDialog({ onCreated }: CreateTeamDialogProps) {
                     )}
                   </div>
                   <Input
-                    placeholder="职责描述"
+                    placeholder="Role description"
                     value={role.description}
                     onChange={e => updateCustomRole(index, 'description', e.target.value)}
                     className="h-8 text-xs"
                     disabled={loading}
                   />
                   <Input
-                    placeholder="能力标签（逗号分隔，如：文案撰写，标题优化，SEO）"
+                    placeholder="Capabilities (comma-separated, e.g. coding, testing, review)"
                     value={role.capabilities}
                     onChange={e => updateCustomRole(index, 'capabilities', e.target.value)}
                     className="h-8 text-xs"
@@ -290,7 +290,7 @@ export function CreateTeamDialog({ onCreated }: CreateTeamDialogProps) {
                 disabled={loading}
               >
                 <Plus className="h-3.5 w-3.5" />
-                添加角色
+                Add Role
               </Button>
             </div>
           )}
@@ -304,10 +304,10 @@ export function CreateTeamDialog({ onCreated }: CreateTeamDialogProps) {
 
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)} disabled={loading}>
-            取消
+            Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={loading}>
-            {loading ? '创建中...' : '创建团队'}
+            {loading ? 'Creating...' : 'Create Team'}
           </Button>
         </DialogFooter>
       </DialogContent>

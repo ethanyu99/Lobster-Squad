@@ -109,7 +109,7 @@ teamRouter.post('/:id/roles', (req, res) => {
   if (isLead) {
     const existingLead = team.roles.find(r => r.isLead);
     if (existingLead) {
-      return res.status(400).json({ error: `角色「${existingLead.name}」已经是 Lead，请先取消其 Lead 状态` });
+      return res.status(400).json({ error: `Role "${existingLead.name}" is already Lead. Remove its Lead status first.` });
     }
   }
 
@@ -141,7 +141,7 @@ teamRouter.put('/:id/roles/:roleId', (req, res) => {
   if (isLead && !existingRole.isLead) {
     const existingLead = team.roles.find(r => r.isLead && r.id !== req.params.roleId);
     if (existingLead) {
-      return res.status(400).json({ error: `角色「${existingLead.name}」已经是 Lead，请先取消其 Lead 状态` });
+      return res.status(400).json({ error: `Role "${existingLead.name}" is already Lead. Remove its Lead status first.` });
     }
   }
 
@@ -169,14 +169,14 @@ teamRouter.delete('/:id/roles/:roleId', (req, res) => {
   if (!role) return res.status(404).json({ error: 'Role not found in this team' });
 
   if (team.roles.length <= 2) {
-    return res.status(400).json({ error: '团队至少需要保留 2 个角色' });
+    return res.status(400).json({ error: 'Team must have at least 2 roles' });
   }
 
   // Don't allow deleting the only Lead
   if (role.isLead) {
     const otherLeads = team.roles.filter(r => r.isLead && r.id !== req.params.roleId);
     if (otherLeads.length === 0) {
-      return res.status(400).json({ error: '无法删除唯一的 Lead 角色，请先指定其他角色为 Lead' });
+      return res.status(400).json({ error: 'Cannot delete the only Lead role. Assign another role as Lead first.' });
     }
   }
 
