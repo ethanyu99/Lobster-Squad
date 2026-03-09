@@ -2,20 +2,13 @@ import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { X, ChevronUp, ChevronDown, GitBranch, Clock, BarChart3, StopCircle } from 'lucide-react';
-import type { ExecutionHistory } from '@/hooks/useInstanceManager';
+import type { ExecutionHistory, ExecutionLog } from '@/hooks/types';
 import { ExecutionGraphView } from './ExecutionGraphView';
 import { ExecutionTimeline } from './ExecutionTimeline';
 import { ExecutionMetricsPanel } from './ExecutionMetricsPanel';
 
 interface ExecutionPanelProps {
-  logs: Array<{
-    executionId: string;
-    message: string;
-    type: string;
-    timestamp: string;
-    turnId?: string;
-    role?: string;
-  }>;
+  logs: ExecutionLog[];
   streams: Record<string, string>;
   activeExecution: ExecutionHistory | null;
   latestExecution?: ExecutionHistory;

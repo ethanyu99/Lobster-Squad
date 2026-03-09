@@ -152,8 +152,8 @@ function MainApp() {
     try {
       const data = await fetchTeams();
       setTeams(data.teams);
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('Failed to load teams:', err);
     }
   }, []);
 

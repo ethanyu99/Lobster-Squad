@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { ExecutionHistory } from '@/hooks/useInstanceManager';
+import type { ExecutionHistory } from '@/hooks/types';
 
 type ExecutionTurnRecord = ExecutionHistory['turns'][number];
 

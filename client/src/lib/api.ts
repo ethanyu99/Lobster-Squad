@@ -401,7 +401,7 @@ export function createWebSocket(onMessage: (msg: WSMessage) => void): WebSocket 
       const msg = JSON.parse(event.data);
       onMessage(msg);
     } catch {
-      // ignore
+      // Malformed WS frame — safe to ignore
     }
   };
 
@@ -417,7 +417,7 @@ export function createShareWebSocket(shareToken: string, onMessage: (msg: WSMess
       const msg = JSON.parse(event.data);
       onMessage(msg);
     } catch {
-      // ignore
+      // Malformed WS frame — safe to ignore
     }
   };
 

@@ -14,7 +14,7 @@ import { Trash2, Monitor, Zap } from 'lucide-react';
 import { fetchSessions, deleteSessionApi, clearSessionsApi, clearExecutionsApi, deleteExecutionApi } from '@/lib/api';
 import type { SessionRecord } from '@shared/types';
 import type { TeamExecutionHistory } from '@/lib/storage';
-import type { ExecutionHistory } from '@/hooks/useInstanceManager';
+import type { ExecutionHistory } from '@/hooks/types';
 import { SessionDetailDialog } from '@/components/SessionDetailDialog';
 
 type HistoryTab = 'sessions' | 'executions';
@@ -38,8 +38,8 @@ export function HistoryDrawer({ open, onOpenChange, executions = [], onViewExecu
     try {
       const data = await fetchSessions();
       setSessions(data.sessions);
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('Failed to fetch sessions:', err);
     }
   }, []);
 

@@ -53,8 +53,8 @@ export function TeamConfigDialog({ team, open, onOpenChange }: TeamConfigDialogP
         if (withName.gitName && !gitName) setGitName(withName.gitName);
         if (withName.gitEmail && !gitEmail) setGitEmail(withName.gitEmail);
       }
-    } catch {
-      // not critical
+    } catch (err) {
+      console.warn('Team git status load failed (not critical):', err);
     } finally {
       setStatusLoading(false);
     }

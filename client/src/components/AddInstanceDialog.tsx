@@ -15,6 +15,10 @@ import { SandboxLoadingAnimation } from './SandboxLoadingAnimation';
 import type { SandboxStep } from './SandboxLoadingAnimation';
 import type { SandboxProgress, SandboxProgressStep } from '@shared/types';
 
+const COMPLETION_STEPS: Set<SandboxProgressStep> = new Set([
+  'sandbox_created', 'config_written', 'gateway_ready', 'daemon_started', 'sandbox_ready',
+]);
+
 interface AddInstanceDialogProps {
   onCreated: () => void;
 }
@@ -39,10 +43,6 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
   const [gatewayToken, setGatewayToken] = useState('');
   const [sandboxDesc, setSandboxDesc] = useState('');
   const [progressSteps, setProgressSteps] = useState<SandboxStep[]>([]);
-
-  const COMPLETION_STEPS: Set<SandboxProgressStep> = new Set([
-    'sandbox_created', 'config_written', 'gateway_ready', 'daemon_started', 'sandbox_ready',
-  ]);
 
   const handleProgress = useCallback((progress: SandboxProgress) => {
     setProgressSteps(prev => {

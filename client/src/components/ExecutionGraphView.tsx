@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { ExecutionHistory } from '@/hooks/useInstanceManager';
+import type { ExecutionHistory } from '@/hooks/types';
 
 type ExecutionTurnRecord = ExecutionHistory['turns'][number];
 type ExecutionEdgeRecord = ExecutionHistory['edges'][number];

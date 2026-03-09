@@ -214,7 +214,8 @@ export function TaskInput({ instances, teams = [], onDispatch, onTeamDispatch, s
       try {
         const results = await uploadFiles(images.map(img => img.file));
         imageUrls = results.map(r => r.url);
-      } catch {
+      } catch (err) {
+        console.warn('Image upload failed:', err);
         setUploading(false);
         return;
       }

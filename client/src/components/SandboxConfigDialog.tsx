@@ -42,8 +42,8 @@ export function SandboxConfigDialog({ instance, open, onOpenChange }: InstanceCo
       setGitStatus(status);
       if (status.gitName && !gitName) setGitName(status.gitName);
       if (status.gitEmail && !gitEmail) setGitEmail(status.gitEmail);
-    } catch {
-      // not critical
+    } catch (err) {
+      console.warn('Sandbox git status load failed (not critical):', err);
     } finally {
       setStatusLoading(false);
     }

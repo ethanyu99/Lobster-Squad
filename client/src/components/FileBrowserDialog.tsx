@@ -152,7 +152,8 @@ export function FileBrowserDialog({ instance, open, onOpenChange }: FileBrowserD
         loaded: true,
         loading: false,
       })));
-    } catch {
+    } catch (err) {
+      console.warn('Failed to load directory:', err);
       setTree(prev => updateNodeInTree(prev, node.path, n => ({
         ...n,
         loading: false,
