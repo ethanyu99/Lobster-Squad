@@ -70,17 +70,19 @@ export function SessionDetailDialog({ session, open, onOpenChange }: SessionDeta
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const sessionKey = session?.sessionKey;
+
   useEffect(() => {
-    if (open && session) {
+    if (open && sessionKey) {
       setLoading(true);
-      fetchSessionDetail(session.sessionKey)
+      fetchSessionDetail(sessionKey)
         .then(setDetail)
         .catch(() => setDetail(null))
         .finally(() => setLoading(false));
     } else {
       setDetail(null);
     }
-  }, [open, session]);
+  }, [open, sessionKey]);
 
   if (!session) return null;
 
