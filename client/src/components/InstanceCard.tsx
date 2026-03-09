@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { InstancePublic } from '@shared/types';
 import { deleteInstance, checkHealth, updateInstance } from '@/lib/api';
+import { useWSStore } from '@/stores/wsStore';
 import { SessionDetailDialog } from '@/components/SessionDetailDialog';
 import { SandboxConfigDialog } from '@/components/SandboxConfigDialog';
 import { ShareDialog } from '@/components/ShareDialog';
@@ -19,7 +20,6 @@ interface InstanceCardProps {
   instance: InstancePublic;
   taskStream?: string;
   onRefresh: () => void;
-  onCancelTask?: (taskId: string) => void;
 }
 
 const statusColor: Record<string, string> = {
@@ -34,7 +34,8 @@ const statusBadgeVariant: Record<string, 'default' | 'secondary' | 'destructive'
   offline: 'outline',
 };
 
-export function InstanceCard({ instance, taskStream, onRefresh, onCancelTask }: InstanceCardProps) {
+export function InstanceCard({ instance, taskStream, onRefresh }: InstanceCardProps) {
+  const cancelTask = useWSStore(s => s.cancelTask);
   const [detailOpen, setDetailOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -235,11 +236,11 @@ export function InstanceCard({ instance, taskStream, onRefresh, onCancelTask }: 
                   Current Task
                 </span>
                 <div className="flex items-center gap-1.5">
-                  {instance.currentTask.status === 'running' && onCancelTask && (
+                  {instance.currentTask.status === 'running' && (
                     <button
                       type="button"
                       className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider font-semibold bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
-                      onClick={(e) => { e.stopPropagation(); onCancelTask(instance.currentTask!.id); }}
+                      onClick={(e) => { e.stopPropagation(); cancelTask(instance.currentTask!.id); }}
                       title="Cancel task"
                     >
                       <XCircle className="h-3 w-3" />

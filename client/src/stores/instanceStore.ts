@@ -1,0 +1,194 @@
+import { create } from 'zustand';
+import type { InstancePublic, InstanceStats, WSMessage } from '@shared/types';
+import { fetchInstances } from '@/lib/api';
+
+interface PendingExchange {
+  instanceId: string;
+  instanceName: string;
+  content: string;
+  timestamp: string;
+}
+
+interface InstanceState {
+  instances: InstancePublic[];
+  taskStreams: Record<string, string>;
+  stats: InstanceStats;
+
+  loadInstances: () => Promise<void>;
+  handleWSMessage: (msg: WSMessage) => void;
+
+  _notifyFn: ((title: string, body: string) => void) | null;
+  setNotifyCallback: (fn: (title: string, body: string) => void) => void;
+
+  _taskContentRef: Record<string, string>;
+  _pendingExchanges: Record<string, PendingExchange>;
+}
+
+function computeStats(instances: InstancePublic[]): InstanceStats {
+  return {
+    total: instances.length,
+    online: instances.filter(i => i.status === 'online').length,
+    busy: instances.filter(i => i.status === 'busy').length,
+    offline: instances.filter(i => i.status === 'offline').length,
+  };
+}
+
+function setInstancesAndStats(instances: InstancePublic[]) {
+  return { instances, stats: computeStats(instances) };
+}
+
+export const useInstanceStore = create<InstanceState>((set, get) => ({
+  instances: [],
+  taskStreams: {},
+  stats: { total: 0, online: 0, busy: 0, offline: 0 },
+  _notifyFn: null,
+  _taskContentRef: {},
+  _pendingExchanges: {},
+
+  setNotifyCallback: (fn) => set({ _notifyFn: fn }),
+
+  loadInstances: async () => {
+    try {
+      const data = await fetchInstances();
+      set(setInstancesAndStats(data.instances));
+    } catch (err) {
+      console.warn('Failed to load instances:', err);
+    }
+  },
+
+  handleWSMessage: (msg) => {
+    const state = get();
+
+    switch (msg.type) {
+      case 'instance:status': {
+        if (msg.payload.instances) {
+          set(setInstancesAndStats(msg.payload.instances));
+        } else if (msg.payload.instanceId) {
+          const updated = state.instances.map(inst =>
+            inst.id === msg.payload.instanceId
+              ? { ...inst, status: msg.payload.status }
+              : inst
+          );
+          set(setInstancesAndStats(updated));
+        }
+        break;
+      }
+
+      case 'task:status': {
+        const serverTaskId = msg.payload?.id || msg.taskId;
+        if (serverTaskId) {
+          delete state._pendingExchanges[serverTaskId];
+        }
+
+        if (msg.payload.status === 'running' || msg.payload.status === 'pending') {
+          const updated = state.instances.map(inst => {
+            if (inst.id !== msg.instanceId) return inst;
+            const isNewTask = !inst.currentTask || inst.currentTask.id !== msg.payload.id;
+            return {
+              ...inst,
+              currentTask: isNewTask ? msg.payload : { ...inst.currentTask, ...msg.payload },
+              status: 'busy' as const,
+            };
+          });
+          set(setInstancesAndStats(updated));
+
+          if (msg.instanceId) {
+            set(prev => {
+              const next = { ...prev.taskStreams };
+              delete next[msg.instanceId!];
+              return { taskStreams: next };
+            });
+          }
+        }
+        break;
+      }
+
+      case 'task:stream': {
+        const chunk = msg.payload.chunk || '';
+        set(prev => ({
+          taskStreams: {
+            ...prev.taskStreams,
+            [msg.instanceId!]: (prev.taskStreams[msg.instanceId!] || '') + chunk,
+          },
+        }));
+
+        if (msg.taskId) {
+          state._taskContentRef[msg.taskId] = (state._taskContentRef[msg.taskId] || '') + chunk;
+        }
+        if (msg.taskId && msg.payload.summary) {
+          const updated = state.instances.map(inst =>
+            inst.id === msg.instanceId && inst.currentTask
+              ? { ...inst, currentTask: { ...inst.currentTask, summary: msg.payload.summary } }
+              : inst
+          );
+          set(setInstancesAndStats(updated));
+        }
+        break;
+      }
+
+      case 'task:complete': {
+        if (msg.taskId) delete state._taskContentRef[msg.taskId];
+        const updated = state.instances.map(inst =>
+          inst.id === msg.instanceId
+            ? {
+                ...inst,
+                status: 'online' as const,
+                currentTask: inst.currentTask
+                  ? { ...inst.currentTask, status: 'completed' as const, summary: msg.payload.summary }
+                  : undefined,
+              }
+            : inst
+        );
+        set(prev => {
+          const streams = { ...prev.taskStreams };
+          delete streams[msg.instanceId!];
+          return { ...setInstancesAndStats(updated), taskStreams: streams };
+        });
+        get().loadInstances();
+        state._notifyFn?.('Task Completed', msg.payload.summary || 'A task has finished');
+        break;
+      }
+
+      case 'task:cancelled': {
+        if (msg.taskId) delete state._taskContentRef[msg.taskId];
+        const updated = state.instances.map(inst =>
+          inst.id === msg.instanceId
+            ? {
+                ...inst,
+                status: 'online' as const,
+                currentTask: inst.currentTask
+                  ? { ...inst.currentTask, status: 'cancelled' as const }
+                  : undefined,
+              }
+            : inst
+        );
+        set(prev => {
+          const streams = { ...prev.taskStreams };
+          delete streams[msg.instanceId!];
+          return { ...setInstancesAndStats(updated), taskStreams: streams };
+        });
+        get().loadInstances();
+        break;
+      }
+
+      case 'task:error': {
+        if (msg.taskId) delete state._taskContentRef[msg.taskId];
+        const updated = state.instances.map(inst =>
+          inst.id === msg.instanceId
+            ? {
+                ...inst,
+                status: 'online' as const,
+                currentTask: inst.currentTask
+                  ? { ...inst.currentTask, status: 'failed' as const }
+                  : undefined,
+              }
+            : inst
+        );
+        set(setInstancesAndStats(updated));
+        get().loadInstances();
+        state._notifyFn?.('Task Failed', msg.payload.error || 'A task has failed');
+        break;
+      }
+    }
+  },
+}));

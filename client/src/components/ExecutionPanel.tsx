@@ -3,18 +3,20 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { X, ChevronUp, ChevronDown, GitBranch, Clock, BarChart3, StopCircle } from 'lucide-react';
 import type { ExecutionHistory, ExecutionLog } from '@/hooks/types';
+import { useExecutionStore } from '@/stores/executionStore';
+import { useWSStore } from '@/stores/wsStore';
 import { ExecutionGraphView } from './ExecutionGraphView';
 import { ExecutionTimeline } from './ExecutionTimeline';
 import { ExecutionMetricsPanel } from './ExecutionMetricsPanel';
 
 interface ExecutionPanelProps {
-  logs: ExecutionLog[];
-  streams: Record<string, string>;
-  activeExecution: ExecutionHistory | null;
-  latestExecution?: ExecutionHistory;
-  onClear: () => void;
-  onCancelExecution?: (executionId: string) => void;
   onViewDetail: (exec: ExecutionHistory) => void;
+  logs?: ExecutionLog[];
+  streams?: Record<string, string>;
+  activeExecution?: ExecutionHistory | null;
+  latestExecution?: ExecutionHistory;
+  onClear?: () => void;
+  onCancelExecution?: (executionId: string) => void;
 }
 
 type PanelView = 'log' | 'graph' | 'timeline' | 'metrics';
@@ -38,15 +40,21 @@ function getRoleColor(role: string): string {
   return ROLE_COLORS[role];
 }
 
-export function ExecutionPanel({
-  logs,
-  streams,
-  activeExecution,
-  latestExecution,
-  onClear,
-  onCancelExecution,
-  onViewDetail,
-}: ExecutionPanelProps) {
+export function ExecutionPanel(props: ExecutionPanelProps) {
+  const storeLogs = useExecutionStore(s => s.executionLogs);
+  const storeStreams = useExecutionStore(s => s.executionStreams);
+  const storeActiveExecution = useExecutionStore(s => s.activeExecution);
+  const storeExecutions = useExecutionStore(s => s.executions);
+  const storeClear = useExecutionStore(s => s.clearExecutionLogs);
+  const storeCancelExecution = useWSStore(s => s.cancelExecution);
+
+  const logs = props.logs ?? storeLogs;
+  const streams = props.streams ?? storeStreams;
+  const activeExecution = props.activeExecution !== undefined ? props.activeExecution : storeActiveExecution;
+  const latestExecution = props.latestExecution ?? storeExecutions[0];
+  const onClear = props.onClear ?? storeClear;
+  const onCancelExecution = props.onCancelExecution ?? storeCancelExecution;
+  const { onViewDetail } = props;
   const [expanded, setExpanded] = useState(true);
   const [view, setView] = useState<PanelView>('log');
   const [stopping, setStopping] = useState(false);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { StatusBar } from '@/components/StatusBar';
 import { InstanceCard } from '@/components/InstanceCard';
@@ -7,17 +7,17 @@ import { TaskInput } from '@/components/TaskInput';
 import { HistoryDrawer } from '@/components/HistoryDrawer';
 import { CreateTeamDialog } from '@/components/CreateTeamDialog';
 import { TeamCard } from '@/components/TeamCard';
-import { TeamExecutionDetailDialog } from '@/components/TeamExecutionDetailDialog';
 import { ExecutionPanel } from '@/components/ExecutionPanel';
 import { ExecutionReportDialog } from '@/components/ExecutionReportDialog';
 import { ShareView } from '@/components/ShareView';
-import { useInstanceManager, type ExecutionHistory } from '@/hooks/useInstanceManager';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
+import { useInstanceStore } from '@/stores/instanceStore';
+import { useExecutionStore } from '@/stores/executionStore';
+import { useTeamStore } from '@/stores/teamStore';
+import { useWSStore } from '@/stores/wsStore';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { fetchTeams } from '@/lib/api';
-import type { TeamPublic } from '@shared/types';
-import type { TeamExecutionHistory } from '@/lib/storage';
+import type { ExecutionHistory } from '@/hooks/types';
 
 type ViewTab = 'instances' | 'teams';
 
@@ -125,46 +125,47 @@ function AuthGate() {
 }
 
 function MainApp() {
-  const {
-    instances, stats, taskStreams, connected,
-    dispatchTask, dispatchTeamTask,
-    cancelTask, cancelExecution,
-    teamExecutions,
-    refreshInstances,
-    executionLogs, executionStreams, executions, activeExecution,
-    clearExecutionLogs,
-    setNotifyCallback,
-  } = useInstanceManager();
+  // ── Store subscriptions ──
+  const instances = useInstanceStore(s => s.instances);
+  const stats = useInstanceStore(s => s.stats);
+  const taskStreams = useInstanceStore(s => s.taskStreams);
+  const setNotifyCallback = useInstanceStore(s => s.setNotifyCallback);
+  const refreshInstances = useInstanceStore(s => s.loadInstances);
+
+  const executionLogs = useExecutionStore(s => s.executionLogs);
+  const executions = useExecutionStore(s => s.executions);
+
+  const teams = useTeamStore(s => s.teams);
+  const loadTeams = useTeamStore(s => s.loadTeams);
+
+  const connected = useWSStore(s => s.connected);
+  const initWS = useWSStore(s => s.init);
+  const dispatchTask = useWSStore(s => s.dispatchTask);
+  const dispatchTeamTask = useWSStore(s => s.dispatchTeamTask);
+
   const { notify, enabled: notifEnabled, toggleEnabled: toggleNotif, supported: notifSupported } = useNotification();
+
+  // ── Initialize WebSocket + load data ──
+  useEffect(() => {
+    const cleanup = initWS();
+    loadTeams();
+    return cleanup;
+  }, [initWS, loadTeams]);
 
   useEffect(() => {
     setNotifyCallback(notify);
   }, [notify, setNotifyCallback]);
+
+  // ── Local UI state ──
   const [historyOpen, setHistoryOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ViewTab>('instances');
-  const [teams, setTeams] = useState<TeamPublic[]>([]);
-  const [selectedExecution, setSelectedExecution] = useState<TeamExecutionHistory | null>(null);
-  const [executionDetailOpen, setExecutionDetailOpen] = useState(false);
   const [selectedAutoExecution, setSelectedAutoExecution] = useState<ExecutionHistory | null>(null);
   const [autoExecDetailOpen, setAutoExecDetailOpen] = useState(false);
 
-  const loadTeams = useCallback(async () => {
-    try {
-      const data = await fetchTeams();
-      setTeams(data.teams);
-    } catch (err) {
-      console.warn('Failed to load teams:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadTeams();
-  }, [loadTeams]);
-
-  const handleTeamRefresh = useCallback(() => {
+  const handleTeamRefresh = () => {
     loadTeams();
     refreshInstances();
-  }, [loadTeams, refreshInstances]);
+  };
 
   return (
     <div className="h-screen flex flex-col bg-[#f8f9fa] text-foreground font-sans selection:bg-primary/20 selection:text-primary">
@@ -233,7 +234,6 @@ function MainApp() {
                       instance={inst}
                       taskStream={taskStreams[inst.id]}
                       onRefresh={refreshInstances}
-                      onCancelTask={cancelTask}
                     />
                   ))
                 )}
@@ -265,15 +265,8 @@ function MainApp() {
         </div>
       </div>
 
-      {/* Execution panel */}
       {executionLogs.length > 0 && (
         <ExecutionPanel
-          logs={executionLogs}
-          streams={executionStreams}
-          activeExecution={activeExecution}
-          latestExecution={executions[0]}
-          onClear={clearExecutionLogs}
-          onCancelExecution={cancelExecution}
           onViewDetail={(exec: ExecutionHistory) => {
             setSelectedAutoExecution(exec);
             setAutoExecDetailOpen(true);
@@ -286,22 +279,11 @@ function MainApp() {
       <HistoryDrawer
         open={historyOpen}
         onOpenChange={setHistoryOpen}
-        teamExecutions={teamExecutions}
-        onViewTeamExecution={(exec) => {
-          setSelectedExecution(exec);
-          setExecutionDetailOpen(true);
-        }}
         executions={executions}
         onViewExecution={(exec) => {
           setSelectedAutoExecution(exec);
           setAutoExecDetailOpen(true);
         }}
-      />
-
-      <TeamExecutionDetailDialog
-        execution={selectedExecution}
-        open={executionDetailOpen}
-        onOpenChange={setExecutionDetailOpen}
       />
 
       <ExecutionReportDialog

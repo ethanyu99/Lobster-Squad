@@ -13,7 +13,6 @@ import { Separator } from '@/components/ui/separator';
 import { Trash2, Monitor, Zap } from 'lucide-react';
 import { fetchSessions, deleteSessionApi, clearSessionsApi, clearExecutionsApi, deleteExecutionApi } from '@/lib/api';
 import type { SessionRecord } from '@shared/types';
-import type { TeamExecutionHistory } from '@/lib/storage';
 import type { ExecutionHistory } from '@/hooks/types';
 import { SessionDetailDialog } from '@/components/SessionDetailDialog';
 
@@ -22,8 +21,6 @@ type HistoryTab = 'sessions' | 'executions';
 interface HistoryDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  teamExecutions?: TeamExecutionHistory[];
-  onViewTeamExecution?: (exec: TeamExecutionHistory) => void;
   executions?: ExecutionHistory[];
   onViewExecution?: (exec: ExecutionHistory) => void;
 }

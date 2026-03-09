@@ -45,7 +45,7 @@
 
 | 层级 | 技术 |
 |------|------|
-| **前端** | React 19, TypeScript, Vite 7, Tailwind CSS 4, shadcn/ui (Radix), Lucide Icons |
+| **前端** | React 19, TypeScript, Vite 7, Tailwind CSS 4, shadcn/ui (Radix), Zustand, Lucide Icons |
 | **后端** | Node.js, Express, TypeScript, WebSocket (ws) |
 | **数据库** | PostgreSQL (主库) + Redis (缓存 + Pub/Sub) |
 | **沙箱** | Novita Sandbox SDK |
@@ -85,11 +85,13 @@ openclaw-instance-manage/
 │       │   ├── ShareView.tsx           # 分享页面（只读视图）
 │       │   ├── SandboxLoadingAnimation.tsx # 沙箱创建动画
 │       │   └── ui/                     # shadcn/ui 基础组件
+│       ├── stores/                    # Zustand 全局状态管理
+│       │   ├── instanceStore.ts      # 实例状态、任务流、WS 消息处理
+│       │   ├── executionStore.ts     # 执行日志 / 流 / 历史
+│       │   ├── teamStore.ts          # 团队列表
+│       │   └── wsStore.ts            # WebSocket 连接、消息路由、派发动作
 │       ├── hooks/
-│       │   ├── types.ts               # Hook 共享类型定义
-│       │   ├── useInstanceManager.ts  # 核心状态编排 Hook
-│       │   ├── useWebSocket.ts        # WebSocket 连接管理
-│       │   ├── useExecutions.ts       # 执行状态管理
+│       │   ├── types.ts               # 共享类型定义
 │       │   ├── useAuth.ts            # 认证状态管理
 │       │   └── useNotification.ts    # 浏览器通知
 │       └── lib/
