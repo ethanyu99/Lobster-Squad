@@ -290,6 +290,7 @@ export function InstanceCard({ instance, taskStream, onRefresh, onCancelTask }: 
         } : null}
         open={detailOpen}
         onOpenChange={setDetailOpen}
+        taskStream={taskStream}
       />
 
       <SandboxConfigDialog

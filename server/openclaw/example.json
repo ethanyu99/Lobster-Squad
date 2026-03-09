@@ -19,7 +19,7 @@
                             "cacheWrite": 0
                         },
                         "contextWindow": 200000,
-                        "maxTokens": 10000
+                        "maxTokens": 128000
                     },
                     {
                         "id": "pa/claude-sonnet-4-6",
@@ -33,7 +33,7 @@
                             "cacheWrite": 0
                         },
                         "contextWindow": 200000,
-                        "maxTokens": 10000
+                        "maxTokens": 128000
                     }
                 ]
             }

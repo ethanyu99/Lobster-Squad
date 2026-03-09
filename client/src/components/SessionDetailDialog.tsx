@@ -16,6 +16,7 @@ interface SessionDetailDialogProps {
   session: SessionRecord | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  taskStream?: string;
 }
 
 const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -66,7 +67,7 @@ function MarkdownContent({ content }: { content: string }) {
   );
 }
 
-export function SessionDetailDialog({ session, open, onOpenChange }: SessionDetailDialogProps) {
+export function SessionDetailDialog({ session, open, onOpenChange, taskStream }: SessionDetailDialogProps) {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -138,6 +139,14 @@ export function SessionDetailDialog({ session, open, onOpenChange }: SessionDeta
                                 [Process exited at {new Date(exchange.completedAt).toLocaleTimeString([], { hour12: false })}]
                               </p>
                             )}
+                          </div>
+                        ) : exchange.status === 'running' && taskStream ? (
+                          <div className="py-1 overflow-hidden font-sans">
+                            <MarkdownContent content={taskStream} />
+                            <div className="flex items-center gap-2 text-muted-foreground mt-2">
+                              <span className="flex h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                              <span className="text-[11px]">Streaming...</span>
+                            </div>
                           </div>
                         ) : exchange.summary ? (
                           <div className="py-1 overflow-hidden font-sans opacity-80">
