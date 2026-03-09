@@ -257,9 +257,16 @@ export const store = {
 
   async isNameTaken(ownerId: string, name: string, excludeId?: string): Promise<boolean> {
     const pool = getPool();
+    if (excludeId) {
+      const { rows } = await pool.query(
+        'SELECT 1 FROM instances WHERE owner_id = $1 AND name = $2 AND id != $3 LIMIT 1',
+        [ownerId, name, excludeId]
+      );
+      return rows.length > 0;
+    }
     const { rows } = await pool.query(
-      'SELECT 1 FROM instances WHERE owner_id = $1 AND name = $2 AND id != $3 LIMIT 1',
-      [ownerId, name, excludeId || '']
+      'SELECT 1 FROM instances WHERE owner_id = $1 AND name = $2 LIMIT 1',
+      [ownerId, name]
     );
     return rows.length > 0;
   },
