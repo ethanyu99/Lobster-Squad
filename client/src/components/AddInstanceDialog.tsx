@@ -80,8 +80,8 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !endpoint.trim()) return;
-    if (name.trim().length > 10) {
-      setError('Name must be 10 characters or less');
+    if (name.trim().length > 30) {
+      setError('Name must be 30 characters or less');
       return;
     }
     setLoading(true);
@@ -106,8 +106,8 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
   const handleSandboxSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!sandboxName.trim() || !apiKey.trim()) return;
-    if (sandboxName.trim().length > 10) {
-      setError('Name must be 10 characters or less');
+    if (sandboxName.trim().length > 30) {
+      setError('Name must be 30 characters or less');
       return;
     }
     setLoading(true);
@@ -178,14 +178,17 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
         {mode === 'sandbox' ? (
           <form onSubmit={handleSandboxSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="sb-name">Name</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="sb-name">Name</Label>
+                <span className="text-xs text-muted-foreground">{sandboxName.length}/30</span>
+              </div>
               <Input
                 id="sb-name"
                 placeholder="my-sandbox"
                 value={sandboxName}
                 onChange={e => setSandboxName(e.target.value)}
                 required
-                maxLength={10}
+                maxLength={30}
                 disabled={loading}
               />
             </div>
@@ -224,12 +227,16 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="sb-desc">Description</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="sb-desc">Description</Label>
+                <span className="text-xs text-muted-foreground">{sandboxDesc.length}/200</span>
+              </div>
               <Input
                 id="sb-desc"
                 placeholder="What does this instance do?"
                 value={sandboxDesc}
                 onChange={e => setSandboxDesc(e.target.value)}
+                maxLength={200}
                 disabled={loading}
               />
             </div>
@@ -241,14 +248,17 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
         ) : (
           <form onSubmit={handleManualSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="name">Name</Label>
+                <span className="text-xs text-muted-foreground">{name.length}/30</span>
+              </div>
               <Input
                 id="name"
                 placeholder="my-instance"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 required
-                maxLength={10}
+                maxLength={30}
                 disabled={loading}
               />
             </div>
@@ -279,12 +289,16 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="desc">Description</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="desc">Description</Label>
+                <span className="text-xs text-muted-foreground">{description.length}/200</span>
+              </div>
               <Input
                 id="desc"
                 placeholder="What does this instance do?"
                 value={description}
                 onChange={e => setDescription(e.target.value)}
+                maxLength={200}
                 disabled={loading}
               />
             </div>

@@ -306,22 +306,30 @@ export function InstanceCard({ instance, taskStream, onRefresh, onCancelTask }: 
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="name">Name</Label>
+                <span className="text-xs text-muted-foreground">{editName.length}/30</span>
+              </div>
               <Input
                 id="name"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="Instance Name"
+                maxLength={30}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="description">Description</Label>
+                <span className="text-xs text-muted-foreground">{editDesc.length}/200</span>
+              </div>
               <Textarea
                 id="description"
                 value={editDesc}
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditDesc(e.target.value)}
                 placeholder="Optional description"
                 rows={3}
+                maxLength={200}
               />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
