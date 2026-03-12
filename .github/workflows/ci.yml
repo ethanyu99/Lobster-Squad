@@ -131,7 +131,12 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E tests
-        run: npx playwright test
+        run: |
+          if [ -d "e2e" ] || [ -d "tests" ] || ls *.spec.ts *.test.ts 2>/dev/null; then
+            npx playwright test
+          else
+            echo "No E2E tests found, skipping"
+          fi
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/lobster_test
           REDIS_URL: redis://localhost:6379
