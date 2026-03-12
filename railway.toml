@@ -2,6 +2,11 @@
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
+# If Railway falls back to Railpack/Nixpacks, ensure devDependencies are installed for build
+[build.environment]
+NODE_ENV = "development"
+NPM_CONFIG_PRODUCTION = "false"
+
 [deploy]
 healthcheckPath = "/api/health"
 healthcheckTimeout = 30
