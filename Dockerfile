@@ -1,7 +1,7 @@
 # ============================================
 # Stage 1: 依赖安装
 # ============================================
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN npm ci --ignore-scripts && \
 # ============================================
 # Stage 2: 构建
 # ============================================
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 ARG VITE_GOOGLE_CLIENT_ID
 ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
@@ -38,7 +38,7 @@ RUN cd client && npm run build && \
 # ============================================
 # Stage 3: 生产依赖
 # ============================================
-FROM node:20-alpine AS prod-deps
+FROM node:24-alpine AS prod-deps
 
 WORKDIR /app/server
 
@@ -49,7 +49,7 @@ RUN npm ci --omit=dev --ignore-scripts
 # ============================================
 # Stage 4: 运行
 # ============================================
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 
 RUN apk add --no-cache tini && \
     addgroup -g 1001 -S app && \
