@@ -1,0 +1,22 @@
+import type { SessionRecord, SessionDetail } from '@shared/types';
+import { apiFetch } from './client';
+
+export async function fetchSessions(): Promise<{ sessions: SessionRecord[] }> {
+  return apiFetch('/sessions');
+}
+
+export async function fetchSessionDetail(sessionKey: string): Promise<SessionDetail> {
+  return apiFetch(`/sessions/${encodeURIComponent(sessionKey)}`);
+}
+
+export async function fetchShareSessionDetail(shareToken: string, sessionKey: string): Promise<SessionDetail> {
+  return apiFetch(`/share/view/${shareToken}/sessions/${encodeURIComponent(sessionKey)}`);
+}
+
+export async function deleteSessionApi(sessionKey: string): Promise<void> {
+  return apiFetch(`/sessions/${encodeURIComponent(sessionKey)}`, { method: 'DELETE' });
+}
+
+export async function clearSessionsApi(): Promise<void> {
+  return apiFetch('/sessions', { method: 'DELETE' });
+}
