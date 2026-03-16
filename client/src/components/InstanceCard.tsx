@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Trash2, RefreshCw, Cloud, Edit2, ExternalLink, Star, Settings, Share2, XCircle, Package, FolderOpen, MessageSquare } from 'lucide-react';
+import { Trash2, RefreshCw, Cloud, Edit2, ExternalLink, Star, Settings, Share2, XCircle, Package, FolderOpen, MessageSquare, Terminal } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,7 @@ import { SandboxConfigDialog } from '@/components/SandboxConfigDialog';
 import { ShareDialog } from '@/components/ShareDialog';
 import { SkillsManagerDialog } from '@/components/skills/SkillsManagerDialog';
 import { FileBrowserDialog } from '@/components/FileBrowserDialog';
+import { TerminalDialog } from '@/components/TerminalDialog';
 
 interface InstanceCardProps {
   instance: InstancePublic;
@@ -45,6 +46,7 @@ export function InstanceCard({ instance, onRefresh }: InstanceCardProps) {
   const [shareOpen, setShareOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
   const [editName, setEditName] = useState(instance.name);
   const [editDesc, setEditDesc] = useState(instance.description || '');
   const [saving, setSaving] = useState(false);
@@ -169,6 +171,17 @@ export function InstanceCard({ instance, onRefresh }: InstanceCardProps) {
                 title="Files"
               >
                 <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
+            )}
+            {instance.sandboxId && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 hover:bg-muted"
+                onClick={(e) => { e.stopPropagation(); setTerminalOpen(true); }}
+                title="Terminal"
+              >
+                <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
               </Button>
             )}
             <Button
@@ -383,6 +396,12 @@ export function InstanceCard({ instance, onRefresh }: InstanceCardProps) {
         instance={instance}
         open={filesOpen}
         onOpenChange={setFilesOpen}
+      />
+
+      <TerminalDialog
+        instance={instance}
+        open={terminalOpen}
+        onOpenChange={setTerminalOpen}
       />
     </>
   );

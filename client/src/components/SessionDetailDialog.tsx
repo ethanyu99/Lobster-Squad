@@ -101,6 +101,7 @@ export function SessionDetailDialog({ session, open, onOpenChange, taskStream, f
       lastStreamContentRef.current = '';
       setTopicValue(undefined);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, sessionKey]);
 
   useEffect(() => {
@@ -118,6 +119,7 @@ export function SessionDetailDialog({ session, open, onOpenChange, taskStream, f
         .catch(() => setDetail(null))
         .finally(() => setLoading(false));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, sessionKey, loading, taskStream, detail?.exchanges]);
 
   if (!session) return null;

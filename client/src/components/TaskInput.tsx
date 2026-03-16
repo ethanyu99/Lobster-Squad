@@ -103,6 +103,7 @@ export function TaskInput({ instances, teams = [], onDispatch, onTeamDispatch, s
 
     setSuggestions(items);
     setHighlightIndex(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, instances, teams, targetInstances, selectedTeam]);
 
   // Auto-resize textarea

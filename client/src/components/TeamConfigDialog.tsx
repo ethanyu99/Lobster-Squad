@@ -63,6 +63,7 @@ export function TeamConfigDialog({ team, open, onOpenChange }: TeamConfigDialogP
     } finally {
       setStatusLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [team.id]);
 
   useEffect(() => {
