@@ -10,9 +10,12 @@ interface WSState {
   connected: boolean;
   _ws: WebSocket | null;
   _reconnectTimer: ReturnType<typeof setTimeout> | null;
+  _terminalHandlers: Map<string, (msg: WSMessage) => void>;
 
   init: () => () => void;
   send: (data: object) => boolean;
+  addTerminalHandler: (instanceId: string, handler: (msg: WSMessage) => void) => void;
+  removeTerminalHandler: (instanceId: string) => void;
 
   dispatchTask: (
     instanceId: string,
@@ -32,6 +35,20 @@ interface WSState {
 }
 
 function routeMessage(msg: WSMessage) {
+  if (msg.type.startsWith('terminal:')) {
+    const handlers = useWSStore.getState()._terminalHandlers;
+    const instanceId = msg.payload?.instanceId;
+    const sessionId = msg.payload?.sessionId;
+    if (instanceId && handlers.has(instanceId)) {
+      handlers.get(instanceId)!(msg);
+    } else if (sessionId) {
+      // Match by sessionId prefix (term-userId-instanceId-timestamp)
+      for (const [id, handler] of handlers) {
+        if (sessionId.includes(id)) { handler(msg); break; }
+      }
+    }
+    return;
+  }
   if (msg.type.startsWith('execution:') || msg.type === 'team:error') {
     useExecutionStore.getState().handleWSMessage(msg);
   } else {
@@ -43,6 +60,14 @@ export const useWSStore = create<WSState>((set, get) => ({
   connected: false,
   _ws: null,
   _reconnectTimer: null,
+  _terminalHandlers: new Map(),
+
+  addTerminalHandler: (instanceId, handler) => {
+    get()._terminalHandlers.set(instanceId, handler);
+  },
+  removeTerminalHandler: (instanceId) => {
+    get()._terminalHandlers.delete(instanceId);
+  },
 
   send: (data) => {
     const ws = get()._ws;

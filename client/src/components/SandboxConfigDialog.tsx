@@ -51,6 +51,7 @@ export function SandboxConfigDialog({ instance, open, onOpenChange }: InstanceCo
     } finally {
       setStatusLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instance.id]);
 
   useEffect(() => {
@@ -59,6 +60,7 @@ export function SandboxConfigDialog({ instance, open, onOpenChange }: InstanceCo
       setResult(null);
       loadStatus();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, loadStatus]);
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -6,6 +6,7 @@ import { logWS, createLogEntry } from './ws-logger';
 import { dispatchToTeam, cancelExecution } from './team-dispatch';
 import { verifyToken } from './auth';
 import { getRedis, getSubscriber } from './redis';
+import { createTerminal, sendTerminalInput, resizeTerminal, closeTerminal, terminalSessions } from './terminal';
 
 const activeControllers = new Map<string, AbortController>();
 
@@ -647,6 +648,63 @@ export function setupWebSocket(wss: WebSocketServer) {
               cancelExecution(executionId);
             }
           }
+
+          if (msg.type === 'terminal:open') {
+            const { instanceId, cols, rows } = msg.payload;
+            const instance = await store.getInstanceRawForOwner(userId, instanceId);
+            if (!instance?.sandboxId || !instance?.apiKey) return;
+
+            const sessionId = `term-${userId}-${instanceId}-${Date.now()}`;
+            try {
+              await createTerminal(
+                sessionId,
+                instance.sandboxId,
+                instance.apiKey,
+                instanceId,
+                cols || 80,
+                rows || 24,
+                (data: Uint8Array) => {
+                  if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                      type: 'terminal:data',
+                      payload: { sessionId, data: Buffer.from(data).toString('base64') },
+                      timestamp: new Date().toISOString(),
+                    }));
+                  }
+                },
+              );
+              ws.send(JSON.stringify({
+                type: 'terminal:opened',
+                payload: { sessionId, instanceId },
+                timestamp: new Date().toISOString(),
+              }));
+            } catch (err) {
+              ws.send(JSON.stringify({
+                type: 'terminal:error',
+                payload: { instanceId, error: err instanceof Error ? err.message : 'Failed to open terminal' },
+                timestamp: new Date().toISOString(),
+              }));
+            }
+          }
+
+          if (msg.type === 'terminal:input') {
+            const { sessionId, data } = msg.payload;
+            try {
+              await sendTerminalInput(sessionId, Buffer.from(data, 'base64'));
+            } catch { /* ignore */ }
+          }
+
+          if (msg.type === 'terminal:resize') {
+            const { sessionId, cols, rows } = msg.payload;
+            try {
+              await resizeTerminal(sessionId, cols, rows);
+            } catch { /* ignore */ }
+          }
+
+          if (msg.type === 'terminal:close') {
+            const { sessionId } = msg.payload;
+            await closeTerminal(sessionId);
+          }
         } catch {
           // ignore parse errors
         }
@@ -655,6 +713,12 @@ export function setupWebSocket(wss: WebSocketServer) {
 
     ws.on('close', () => {
       clients.delete(ws);
+      // Close any terminal sessions for this connection
+      for (const [sid] of terminalSessions) {
+        if (sid.startsWith(`term-${userId}-`)) {
+          closeTerminal(sid);
+        }
+      }
     });
   });
 
