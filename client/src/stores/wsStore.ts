@@ -14,6 +14,7 @@ interface WSState {
 
   init: () => () => void;
   send: (data: object) => boolean;
+
   addTerminalHandler: (instanceId: string, handler: (msg: WSMessage) => void) => void;
   removeTerminalHandler: (instanceId: string) => void;
 
@@ -36,15 +37,20 @@ interface WSState {
 
 function routeMessage(msg: WSMessage) {
   if (msg.type.startsWith('terminal:')) {
-    const handlers = useWSStore.getState()._terminalHandlers;
     const instanceId = msg.payload?.instanceId;
     const sessionId = msg.payload?.sessionId;
+    const handlers = useWSStore.getState()._terminalHandlers;
     if (instanceId && handlers.has(instanceId)) {
       handlers.get(instanceId)!(msg);
-    } else if (sessionId) {
-      // Match by sessionId prefix (term-userId-instanceId-timestamp)
+      return;
+    }
+    // Also try matching by session prefix (sessionId contains instanceId)
+    if (sessionId) {
       for (const [id, handler] of handlers) {
-        if (sessionId.includes(id)) { handler(msg); break; }
+        if (sessionId.includes(id)) {
+          handler(msg);
+          return;
+        }
       }
     }
     return;
@@ -63,10 +69,15 @@ export const useWSStore = create<WSState>((set, get) => ({
   _terminalHandlers: new Map(),
 
   addTerminalHandler: (instanceId, handler) => {
-    get()._terminalHandlers.set(instanceId, handler);
+    const handlers = new Map(get()._terminalHandlers);
+    handlers.set(instanceId, handler);
+    set({ _terminalHandlers: handlers });
   },
+
   removeTerminalHandler: (instanceId) => {
-    get()._terminalHandlers.delete(instanceId);
+    const handlers = new Map(get()._terminalHandlers);
+    handlers.delete(instanceId);
+    set({ _terminalHandlers: handlers });
   },
 
   send: (data) => {
