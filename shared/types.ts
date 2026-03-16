@@ -270,7 +270,14 @@ export type WSMessageType =
   | 'execution:completed'
   | 'execution:timeout'
   | 'execution:cancel'
-  | 'execution:cancelled';
+  | 'execution:cancelled'
+  | 'terminal:open'
+  | 'terminal:opened'
+  | 'terminal:data'
+  | 'terminal:input'
+  | 'terminal:resize'
+  | 'terminal:close'
+  | 'terminal:error';
 
 export interface WSMessage {
   type: WSMessageType;
