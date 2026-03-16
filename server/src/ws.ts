@@ -350,9 +350,17 @@ async function handleSSEEvent(
       await store.updateTask(taskId, { status: 'completed', summary: summaryForTask });
       await store.updateTaskOutput(taskId, fullOutput);
       await store.updateInstance(instanceId, { status: 'online' });
+
+      // Extract token usage from response
+      const usage = output?.usage as Record<string, number> | undefined;
+      const tokenUsage = usage ? {
+        prompt: usage.input_tokens || usage.prompt_tokens || 0,
+        completion: usage.output_tokens || usage.completion_tokens || 0,
+      } : undefined;
+
       broadcastToOwner(ownerId, {
         type: 'task:complete',
-        payload: { taskId, status: 'completed', summary: summaryForTask },
+        payload: { taskId, status: 'completed', summary: summaryForTask, tokenUsage },
         instanceId,
         taskId,
         sessionKey,
@@ -415,23 +423,31 @@ function extractShareToken(req: IncomingMessage): string | null {
   }
 }
 
-function validateAccessToken(req: IncomingMessage): boolean {
-  try {
-    const url = new URL(req.url || '', `http://${req.headers.host}`);
-    const token = url.searchParams.get('token');
+// ── WebSocket rate limiting ──
+const wsConnectionAttempts = new Map<string, { count: number; resetAt: number }>();
+const MAX_WS_CONNECTIONS_PER_MINUTE = 20;
 
-    if (token) {
-      const jwtPayload = verifyToken(token);
-      if (jwtPayload) return true;
-    }
+function checkWsRateLimit(req: IncomingMessage): boolean {
+  const ip = req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const entry = wsConnectionAttempts.get(ip);
 
-    const accessToken = process.env.ACCESS_TOKEN;
-    if (!accessToken) return true;
-    return token === accessToken;
-  } catch {
-    return false;
+  if (!entry || now > entry.resetAt) {
+    wsConnectionAttempts.set(ip, { count: 1, resetAt: now + 60_000 });
+    return true;
   }
+
+  entry.count++;
+  return entry.count <= MAX_WS_CONNECTIONS_PER_MINUTE;
 }
+
+// Clean up stale entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of wsConnectionAttempts) {
+    if (now > entry.resetAt) wsConnectionAttempts.delete(ip);
+  }
+}, 300_000);
 
 const HEARTBEAT_INTERVAL = 30_000; // 30s ping interval
 const CLIENT_TIMEOUT = 60_000;     // 60s no-pong → terminate
@@ -463,8 +479,8 @@ export function setupWebSocket(wss: WebSocketServer) {
   });
 
   wss.on('connection', async (ws, req) => {
-    if (!validateAccessToken(req)) {
-      ws.close(4001, 'Unauthorized');
+    if (!checkWsRateLimit(req)) {
+      ws.close(4029, 'Too many connection attempts');
       return;
     }
 
