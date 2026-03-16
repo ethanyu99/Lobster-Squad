@@ -26,6 +26,7 @@ import { initStore, store } from './store';
 import { initRedis } from './redis';
 import { initSkillLoader } from './skill-loader';
 import { errorHandler } from './middleware/error-handler';
+import { rateLimiter } from './middleware/rate-limiter';
 
 const app = express();
 const server = http.createServer(app);
@@ -47,6 +48,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+app.use('/api/', rateLimiter);
 
 app.use('/api/instances', authMiddleware, instanceRouter);
 app.use('/api/tasks', authMiddleware, taskRouter);
