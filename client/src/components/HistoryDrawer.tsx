@@ -67,13 +67,13 @@ export function HistoryDrawer({ open, onOpenChange, executions = [], onViewExecu
 
   const handleClearAll = async () => {
     if (tab === 'sessions') {
-      if (!confirm('清除所有会话历史？')) return;
+      if (!confirm('Clear all session history?')) return;
       await clearSessionsApi();
       setSessions([]);
       setSessionsTotal(0);
       setSessionsHasMore(false);
     } else {
-      if (!confirm('清除所有执行历史？')) return;
+      if (!confirm('Clear all execution history?')) return;
       await clearExecutionsApi();
     }
   };
@@ -129,12 +129,12 @@ export function HistoryDrawer({ open, onOpenChange, executions = [], onViewExecu
                   onClick={handleClearAll}
                 >
                   <Trash2 className="h-3 w-3 mr-1.5" />
-                  全部清除
+                  Clear All
                 </Button>
               )}
             </div>
             <SheetDescription className="font-mono text-xs mt-1">
-              {currentCount} 条{tab === 'sessions' ? '会话' : '执行'}记录
+              {currentCount} {tab === 'sessions' ? 'sessions' : 'executions'}
             </SheetDescription>
           </SheetHeader>
 
@@ -151,7 +151,7 @@ export function HistoryDrawer({ open, onOpenChange, executions = [], onViewExecu
                 onClick={() => setTab('sessions')}
               >
                 <Monitor className="h-3 w-3" />
-                会话 ({sessionsTotal})
+                Sessions ({sessionsTotal})
               </button>
               <button
                 type="button"
@@ -163,7 +163,7 @@ export function HistoryDrawer({ open, onOpenChange, executions = [], onViewExecu
                 onClick={() => setTab('executions')}
               >
                 <Zap className="h-3 w-3" />
-                执行 ({executions.length})
+                Executions ({executions.length})
               </button>
             </div>
           </div>
@@ -174,7 +174,7 @@ export function HistoryDrawer({ open, onOpenChange, executions = [], onViewExecu
             {tab === 'sessions' && (
               sessions.length === 0 ? (
                 <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
-                  暂无会话历史
+                  No session history
                 </div>
               ) : (
                 <div className="p-2">
@@ -241,10 +241,10 @@ export function HistoryDrawer({ open, onOpenChange, executions = [], onViewExecu
                         {loadingMore ? (
                           <>
                             <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
-                            加载中...
+                            Loading...
                           </>
                         ) : (
-                          `加载更多 (${sessionsTotal - sessions.length} 条剩余)`
+                          `Load more (${sessionsTotal - sessions.length}  remaining)`
                         )}
                       </Button>
                     </div>
@@ -256,7 +256,7 @@ export function HistoryDrawer({ open, onOpenChange, executions = [], onViewExecu
             {tab === 'executions' && (
               executions.length === 0 ? (
                 <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
-                  暂无执行历史
+                  No execution history
                 </div>
               ) : (
                 <div className="p-2">
@@ -287,7 +287,7 @@ export function HistoryDrawer({ open, onOpenChange, executions = [], onViewExecu
                                   variant={exec.status === 'completed' ? 'secondary' : exec.status === 'failed' ? 'destructive' : exec.status === 'timeout' ? 'outline' : 'default'}
                                   className="text-[9px] font-mono h-4 px-1 rounded-sm shrink-0"
                                 >
-                                  {exec.turns.length} 轮
+                                  {exec.turns.length} turns
                                 </Badge>
                               </div>
                               <div className="flex items-center gap-2 shrink-0 h-4">

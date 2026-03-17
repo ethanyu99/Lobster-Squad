@@ -23,7 +23,7 @@ export function ThemeToggle() {
       size="icon"
       className="h-8 w-8"
       onClick={() => setDark(d => !d)}
-      title={dark ? '切换亮色模式' : '切换暗色模式'}
+      title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
       {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
     </Button>

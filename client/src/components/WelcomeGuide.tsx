@@ -24,11 +24,11 @@ export function WelcomeGuide({ onCreated }: WelcomeGuideProps) {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <span className="bg-primary/10 rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold text-primary">1</span>
-              添加你的第一个实例
+              Add your first instance
             </CardTitle>
             <CardDescription>
-              连接一个 OpenClaw 实例，或创建一个沙箱实例来开始。
-              实例是你的 AI 代理运行环境。
+              Connect an OpenClaw instance or create a sandbox to get started.
+              Instances are the runtime environments for your AI agents.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -37,10 +37,10 @@ export function WelcomeGuide({ onCreated }: WelcomeGuideProps) {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <span className="bg-muted rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">2</span>
-              派发任务
+              Dispatch Tasks
             </CardTitle>
             <CardDescription>
-              使用底部输入框向实例发送编程任务，实时查看输出。
+              Send coding tasks to instances using the input box below and view output in real-time.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -49,10 +49,10 @@ export function WelcomeGuide({ onCreated }: WelcomeGuideProps) {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <span className="bg-muted rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">3</span>
-              组建团队协作
+              Build Team Collaboration
             </CardTitle>
             <CardDescription>
-              创建团队，让多个实例扮演不同角色（PM、开发、测试），协作完成复杂任务。
+              Create teams with multiple instances playing different roles (PM, Dev, QA) to collaborate on complex tasks.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -65,15 +65,15 @@ export function WelcomeGuide({ onCreated }: WelcomeGuideProps) {
       <div className="mt-8 grid grid-cols-3 gap-4 text-center text-xs text-muted-foreground">
         <div className="flex flex-col items-center gap-1">
           <Terminal className="h-4 w-4" />
-          <span>Web 终端</span>
+          <span>Web Terminal</span>
         </div>
         <div className="flex flex-col items-center gap-1">
           <FolderOpen className="h-4 w-4" />
-          <span>文件浏览</span>
+          <span>File Browser</span>
         </div>
         <div className="flex flex-col items-center gap-1">
           <Users className="h-4 w-4" />
-          <span>多实例协作</span>
+          <span>Multi-Instance</span>
         </div>
       </div>
     </div>

@@ -62,11 +62,11 @@ function MarkdownContent({ content }: { content: string }) {
 }
 
 const stepStatusConfig: Record<TeamStepRecord['status'], { icon: typeof CheckCircle2; color: string; label: string }> = {
-  completed: { icon: CheckCircle2, color: 'text-emerald-500', label: '已完成' },
-  failed: { icon: XCircle, color: 'text-red-500', label: '失败' },
-  running: { icon: Clock, color: 'text-blue-500 animate-pulse', label: '执行中' },
-  pending: { icon: Clock, color: 'text-zinc-400', label: '等待中' },
-  skipped: { icon: SkipForward, color: 'text-zinc-400', label: '已跳过' },
+  completed: { icon: CheckCircle2, color: 'text-emerald-500', label: 'Completed' },
+  failed: { icon: XCircle, color: 'text-red-500', label: 'Failed' },
+  running: { icon: Clock, color: 'text-blue-500 animate-pulse', label: 'Running' },
+  pending: { icon: Clock, color: 'text-zinc-400', label: 'Pending' },
+  skipped: { icon: SkipForward, color: 'text-zinc-400', label: 'Skipped' },
 };
 
 function StepCard({ step, defaultExpanded }: { step: TeamStepRecord; defaultExpanded?: boolean }) {
@@ -105,7 +105,7 @@ function StepCard({ step, defaultExpanded }: { step: TeamStepRecord; defaultExpa
         <div className="border-t border-border/40">
           {step.task && (
             <div className="px-4 py-2.5 bg-muted/20 border-b border-border/30 min-w-0">
-              <p className="text-[11px] font-medium text-muted-foreground mb-1">任务</p>
+              <p className="text-[11px] font-medium text-muted-foreground mb-1">Task</p>
               <p className="text-xs text-foreground/90 break-words whitespace-pre-wrap">{step.task}</p>
             </div>
           )}
@@ -115,13 +115,13 @@ function StepCard({ step, defaultExpanded }: { step: TeamStepRecord; defaultExpa
             </div>
           ) : (
             <div className="px-4 py-4 text-xs text-muted-foreground text-center">
-              暂无输出内容
+              No output
             </div>
           )}
           {(step.startedAt || step.completedAt) && (
             <div className="px-4 py-2 bg-muted/10 border-t border-border/30 flex items-center gap-4 text-[10px] text-muted-foreground font-mono">
-              {step.startedAt && <span>开始: {new Date(step.startedAt).toLocaleTimeString([], { hour12: false })}</span>}
-              {step.completedAt && <span>结束: {new Date(step.completedAt).toLocaleTimeString([], { hour12: false })}</span>}
+              {step.startedAt && <span>Start: {new Date(step.startedAt).toLocaleTimeString([], { hour12: false })}</span>}
+              {step.completedAt && <span>End: {new Date(step.completedAt).toLocaleTimeString([], { hour12: false })}</span>}
             </div>
           )}
         </div>
@@ -146,16 +146,16 @@ export function TeamExecutionDetailDialog({ execution, open, onOpenChange }: Tea
             </div>
             <div className="flex-1 min-w-0">
               <DialogTitle className="text-base font-semibold flex items-center gap-2">
-                {execution.teamName || '团队执行'}
+                {execution.teamName || 'Team Execution'}
                 <Badge
                   variant={execution.status === 'completed' ? 'secondary' : execution.status === 'failed' ? 'destructive' : 'default'}
                   className="text-[10px]"
                 >
-                  {execution.status === 'completed' ? '已完成' : execution.status === 'failed' ? '失败' : '执行中'}
+                  {execution.status === 'completed' ? 'Completed' : execution.status === 'failed' ? 'Failed' : 'Running'}
                 </Badge>
               </DialogTitle>
               <DialogDescription className="text-xs mt-1">
-                {completedSteps}/{totalSteps} 步骤完成
+                {completedSteps}/{totalSteps} steps completed
                 <span className="mx-2 opacity-50">|</span>
                 {new Date(execution.createdAt).toLocaleString()}
               </DialogDescription>
@@ -169,7 +169,7 @@ export function TeamExecutionDetailDialog({ execution, open, onOpenChange }: Tea
             <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/30 border border-border/40">
               <Target className="h-4 w-4 text-primary mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">目标</p>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Goal</p>
                 <p className="text-sm text-foreground whitespace-pre-wrap break-words">{execution.goal}</p>
               </div>
             </div>
@@ -180,7 +180,7 @@ export function TeamExecutionDetailDialog({ execution, open, onOpenChange }: Tea
                 <div className="flex items-center gap-2 mb-3">
                   <ListChecks className="h-4 w-4 text-muted-foreground" />
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    执行计划 ({execution.plan.length} 步)
+                    Execution Plan ({execution.plan.length} steps)
                   </p>
                 </div>
                 <div className="space-y-1 pl-1">
@@ -200,11 +200,11 @@ export function TeamExecutionDetailDialog({ execution, open, onOpenChange }: Tea
             {/* Step details */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                执行详情
+                Execution Details
               </p>
               <div className="space-y-2">
                 {execution.steps.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">暂无执行步骤记录</p>
+                  <p className="text-sm text-muted-foreground text-center py-8">No execution steps</p>
                 ) : (
                   execution.steps.map(step => (
                     <StepCard key={step.step} step={step} defaultExpanded={execution.steps.length <= 3} />
@@ -219,10 +219,10 @@ export function TeamExecutionDetailDialog({ execution, open, onOpenChange }: Tea
         {execution.completedAt && (
           <div className="shrink-0 px-6 py-3 border-t border-border/50 bg-muted/20 flex items-center justify-between text-[11px] text-muted-foreground font-mono">
             <span>
-              耗时 {Math.round((new Date(execution.completedAt).getTime() - new Date(execution.createdAt).getTime()) / 1000)}s
+              Duration {Math.round((new Date(execution.completedAt).getTime() - new Date(execution.createdAt).getTime()) / 1000)}s
             </span>
             <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onOpenChange(false)}>
-              关闭
+              Close
             </Button>
           </div>
         )}

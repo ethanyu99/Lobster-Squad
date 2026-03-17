@@ -94,7 +94,7 @@ export function AddInstanceDialog({ onCreated }: AddInstanceDialogProps) {
         description: description.trim(),
         token: token.trim() || undefined,
       });
-      toast.success('实例创建成功');
+      toast.success('Instance created successfully');
       resetForm();
       setOpen(false);
       onCreated();

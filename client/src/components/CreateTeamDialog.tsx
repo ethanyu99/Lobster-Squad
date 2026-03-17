@@ -111,7 +111,7 @@ export function CreateTeamDialog({ onCreated }: CreateTeamDialogProps) {
           })),
         });
       }
-      toast.success('团队创建成功');
+      toast.success('Team created successfully');
       resetForm();
       setOpen(false);
       onCreated();

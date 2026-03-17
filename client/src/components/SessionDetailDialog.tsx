@@ -261,7 +261,7 @@ export function SessionDetailDialog({ session, open, onOpenChange, taskStream, f
                             <MarkdownContent content={lastStreamContentRef.current} />
                             <div className="flex items-center gap-2 text-muted-foreground mt-2">
                               <span className="flex h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-                              <span className="text-[11px]">正在加载最终结果…</span>
+                              <span className="text-[11px]">Loading final result…</span>
                             </div>
                           </div>
                         ) : exchange.summary ? (
@@ -274,7 +274,7 @@ export function SessionDetailDialog({ session, open, onOpenChange, taskStream, f
                               <span className="flex h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
                               <span className="text-[11px]">Executing...</span>
                             </div>
-                            <p className="text-[11px] mt-2 opacity-70">正在执行，输出将在此处流式显示</p>
+                            <p className="text-[11px] mt-2 opacity-70">Executing, output will stream here</p>
                           </div>
                         ) : null}
                       </div>

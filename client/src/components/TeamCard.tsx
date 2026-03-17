@@ -51,7 +51,7 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
 
   const handleEditSave = async () => {
     if (!editName.trim()) {
-      setError('名称不能为空');
+      setError('Name cannot be empty');
       return;
     }
     setSaving(true);
@@ -68,7 +68,7 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
   };
 
   const handleDelete = async () => {
-    if (!confirm(`删除团队 "${team.name}"？所有角色绑定将被解除。`)) return;
+    if (!confirm(`Delete team "${team.name}"? All role bindings will be removed.`)) return;
     setDeleting(true);
     try {
       await deleteTeam(team.id);
@@ -98,7 +98,7 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
   };
 
   const handleAddRole = async () => {
-    if (!newRole.name.trim()) { setError('角色名称不能为空'); return; }
+    if (!newRole.name.trim()) { setError('Role name cannot be empty'); return; }
     setAddingRole(true);
     setError('');
     try {
@@ -112,7 +112,7 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
       setNewRole({ name: '', description: '', capabilities: '', isLead: false });
       onRefresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '添加角色失败');
+      setError(err instanceof Error ? err.message : 'Failed to add role');
     } finally {
       setAddingRole(false);
     }
@@ -131,7 +131,7 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
   };
 
   const handleEditRole = async () => {
-    if (!editingRole || !editRoleForm.name.trim()) { setError('角色名称不能为空'); return; }
+    if (!editingRole || !editRoleForm.name.trim()) { setError('Role name cannot be empty'); return; }
     setSavingRole(true);
     setError('');
     try {
@@ -145,19 +145,19 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
       setEditingRole(null);
       onRefresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '更新角色失败');
+      setError(err instanceof Error ? err.message : 'Failed to update role');
     } finally {
       setSavingRole(false);
     }
   };
 
   const handleDeleteRole = async (role: ClawRole) => {
-    if (!confirm(`删除角色「${role.name}」？如果有绑定的实例将被自动解绑。`)) return;
+    if (!confirm(`Delete role "${role.name}"? Bound instances will be unbound automatically.`)) return;
     try {
       await deleteRole(team.id, role.id);
       onRefresh();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '删除角色失败');
+      alert(err instanceof Error ? err.message : 'Failed to delete role');
     }
   };
 
@@ -238,14 +238,14 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
                     )}
                     <Button
                       variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover/role:opacity-100 transition-opacity"
-                      onClick={() => openEditRole(role)} title="编辑角色"
+                      onClick={() => openEditRole(role)} title="Edit role"
                     >
                       <Edit2 className="h-2.5 w-2.5 text-muted-foreground" />
                     </Button>
                     <Button
                       variant="ghost" size="icon"
                       className="h-5 w-5 opacity-0 group-hover/role:opacity-100 transition-opacity hover:text-destructive"
-                      onClick={() => handleDeleteRole(role)} title="删除角色"
+                      onClick={() => handleDeleteRole(role)} title="Delete role"
                     >
                       <X className="h-2.5 w-2.5 text-muted-foreground" />
                     </Button>
@@ -276,7 +276,7 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
                       <Button
                         variant="ghost" size="icon" className="h-6 w-6"
                         onClick={() => handleUnbind(boundInstance.id)}
-                        title="解除绑定"
+                        title="Unbind"
                       >
                         <Unlink className="h-3 w-3 text-muted-foreground" />
                       </Button>
@@ -288,7 +288,7 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
                       onClick={() => setBindDialogRole(role)}
                     >
                       <Link className="h-3 w-3" />
-                      绑定实例
+                      Bind Instance
                     </Button>
                   )}
                 </div>
@@ -301,7 +301,7 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
             onClick={() => { setError(''); setNewRole({ name: '', description: '', capabilities: '', isLead: false }); setAddRoleOpen(true); }}
           >
             <Plus className="h-3.5 w-3.5" />
-            添加角色
+            Add Role
           </Button>
         </CardContent>
       </Card>
@@ -310,22 +310,22 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>编辑团队</DialogTitle>
+            <DialogTitle>Edit Team</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>名称</Label>
+              <Label>Name</Label>
               <Input value={editName} onChange={e => setEditName(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>描述</Label>
+              <Label>Description</Label>
               <Input value={editDesc} onChange={e => setEditDesc(e.target.value)} />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>取消</Button>
-            <Button onClick={handleEditSave} disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
+            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={handleEditSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -334,20 +334,20 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
       <Dialog open={addRoleOpen} onOpenChange={setAddRoleOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>添加角色</DialogTitle>
+            <DialogTitle>Add Role</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>角色名称 *</Label>
-              <Input value={newRole.name} onChange={e => setNewRole({ ...newRole, name: e.target.value })} placeholder="如：前端工程师" />
+              <Label>Role Name *</Label>
+              <Input value={newRole.name} onChange={e => setNewRole({ ...newRole, name: e.target.value })} placeholder="e.g. Frontend Engineer" />
             </div>
             <div className="space-y-2">
-              <Label>职责描述</Label>
-              <Textarea value={newRole.description} onChange={e => setNewRole({ ...newRole, description: e.target.value })} placeholder="描述该角色的职责" rows={2} />
+              <Label>Description</Label>
+              <Textarea value={newRole.description} onChange={e => setNewRole({ ...newRole, description: e.target.value })} placeholder="Describe this role's responsibilities" rows={2} />
             </div>
             <div className="space-y-2">
-              <Label>能力标签</Label>
-              <Input value={newRole.capabilities} onChange={e => setNewRole({ ...newRole, capabilities: e.target.value })} placeholder="逗号分隔，如：React, TypeScript, CSS" />
+              <Label>Capabilities</Label>
+              <Input value={newRole.capabilities} onChange={e => setNewRole({ ...newRole, capabilities: e.target.value })} placeholder="Comma separated, e.g. React, TypeScript, CSS" />
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -356,13 +356,13 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
                 onChange={e => setNewRole({ ...newRole, isLead: e.target.checked })}
                 className="rounded border-border"
               />
-              <Label htmlFor="newRoleIsLead" className="text-sm font-normal cursor-pointer">设为 Lead（负责人）</Label>
+              <Label htmlFor="newRoleIsLead" className="text-sm font-normal cursor-pointer">Set as Lead</Label>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddRoleOpen(false)} disabled={addingRole}>取消</Button>
-            <Button onClick={handleAddRole} disabled={addingRole}>{addingRole ? '添加中...' : '添加'}</Button>
+            <Button variant="outline" onClick={() => setAddRoleOpen(false)} disabled={addingRole}>Cancel</Button>
+            <Button onClick={handleAddRole} disabled={addingRole}>{addingRole ? 'Adding...' : 'Add'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -371,20 +371,20 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
       <Dialog open={editRoleOpen} onOpenChange={v => { if (!v) { setEditRoleOpen(false); setEditingRole(null); } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>编辑角色</DialogTitle>
+            <DialogTitle>Edit Role</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>角色名称 *</Label>
+              <Label>Role Name *</Label>
               <Input value={editRoleForm.name} onChange={e => setEditRoleForm({ ...editRoleForm, name: e.target.value })} />
             </div>
             <div className="space-y-2">
-              <Label>职责描述</Label>
+              <Label>Description</Label>
               <Textarea value={editRoleForm.description} onChange={e => setEditRoleForm({ ...editRoleForm, description: e.target.value })} rows={2} />
             </div>
             <div className="space-y-2">
-              <Label>能力标签</Label>
-              <Input value={editRoleForm.capabilities} onChange={e => setEditRoleForm({ ...editRoleForm, capabilities: e.target.value })} placeholder="逗号分隔" />
+              <Label>Capabilities</Label>
+              <Input value={editRoleForm.capabilities} onChange={e => setEditRoleForm({ ...editRoleForm, capabilities: e.target.value })} placeholder="Comma separated" />
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -393,13 +393,13 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
                 onChange={e => setEditRoleForm({ ...editRoleForm, isLead: e.target.checked })}
                 className="rounded border-border"
               />
-              <Label htmlFor="editRoleIsLead" className="text-sm font-normal cursor-pointer">设为 Lead（负责人）</Label>
+              <Label htmlFor="editRoleIsLead" className="text-sm font-normal cursor-pointer">Set as Lead</Label>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditRoleOpen(false); setEditingRole(null); }} disabled={savingRole}>取消</Button>
-            <Button onClick={handleEditRole} disabled={savingRole}>{savingRole ? '保存中...' : '保存'}</Button>
+            <Button variant="outline" onClick={() => { setEditRoleOpen(false); setEditingRole(null); }} disabled={savingRole}>Cancel</Button>
+            <Button onClick={handleEditRole} disabled={savingRole}>{savingRole ? 'Saving...' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -418,11 +418,11 @@ export function TeamCard({ team, instances, onRefresh }: TeamCardProps) {
       <Dialog open={!!bindDialogRole} onOpenChange={v => { if (!v) setBindDialogRole(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>绑定实例到「{bindDialogRole?.name}」</DialogTitle>
+            <DialogTitle>Bind Instance to &quot;{bindDialogRole?.name}&quot;</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 py-4">
             {unassignedInstances.filter(i => !i.teamId).length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">没有可用的实例，请先创建实例</p>
+              <p className="text-sm text-muted-foreground text-center py-4">No instances available. Please create an instance first.</p>
             ) : (
               unassignedInstances.filter(i => !i.teamId).map(inst => (
                 <button

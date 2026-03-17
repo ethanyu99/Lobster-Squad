@@ -74,18 +74,18 @@ function MarkdownContent({ content }: { content: string }) {
 }
 
 const STATUS_CONFIG = {
-  completed: { color: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: '已完成', icon: CheckCircle2 },
-  failed: { color: 'bg-red-50 text-red-700 border-red-200', label: '失败', icon: XCircle },
-  timeout: { color: 'bg-amber-50 text-amber-700 border-amber-200', label: '超时', icon: AlertTriangle },
-  running: { color: 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse', label: '执行中', icon: Clock },
-  cancelled: { color: 'bg-zinc-50 text-zinc-700 border-zinc-200', label: '已取消', icon: XCircle },
+  completed: { color: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Completed', icon: CheckCircle2 },
+  failed: { color: 'bg-red-50 text-red-700 border-red-200', label: 'Failed', icon: XCircle },
+  timeout: { color: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Timeout', icon: AlertTriangle },
+  running: { color: 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse', label: 'Running', icon: Clock },
+  cancelled: { color: 'bg-zinc-50 text-zinc-700 border-zinc-200', label: 'Cancelled', icon: XCircle },
 } as const;
 
 const TURN_STATUS_CONFIG: Record<string, { icon: typeof CheckCircle2; color: string; label: string }> = {
-  completed: { icon: CheckCircle2, color: 'text-emerald-500', label: '已完成' },
-  failed: { icon: XCircle, color: 'text-red-500', label: '失败' },
-  running: { icon: Clock, color: 'text-blue-500 animate-pulse', label: '执行中' },
-  pending: { icon: Clock, color: 'text-zinc-400', label: '等待中' },
+  completed: { icon: CheckCircle2, color: 'text-emerald-500', label: 'Completed' },
+  failed: { icon: XCircle, color: 'text-red-500', label: 'Failed' },
+  running: { icon: Clock, color: 'text-blue-500 animate-pulse', label: 'Running' },
+  pending: { icon: Clock, color: 'text-zinc-400', label: 'Pending' },
 };
 
 function formatDuration(ms: number): string {
@@ -150,7 +150,7 @@ function TurnCard({ turn, defaultExpanded }: { turn: ExecutionTurnRecord; defaul
         <div className="border-t border-border/40">
           {turn.task && (
             <div className="px-4 py-2.5 bg-muted/20 border-b border-border/30 min-w-0">
-              <p className="text-[11px] font-medium text-muted-foreground mb-1">任务</p>
+              <p className="text-[11px] font-medium text-muted-foreground mb-1">Task</p>
               <p className="text-xs text-foreground/90 break-words whitespace-pre-wrap line-clamp-4">{turn.task}</p>
             </div>
           )}
@@ -160,13 +160,13 @@ function TurnCard({ turn, defaultExpanded }: { turn: ExecutionTurnRecord; defaul
             </div>
           ) : (
             <div className="px-4 py-4 text-xs text-muted-foreground text-center">
-              暂无输出内容
+              No output
             </div>
           )}
           {(turn.startedAt || turn.completedAt) && (
             <div className="px-4 py-2 bg-muted/10 border-t border-border/30 flex items-center gap-4 text-[10px] text-muted-foreground font-mono">
-              {turn.startedAt && <span>开始: {new Date(turn.startedAt).toLocaleTimeString([], { hour12: false })}</span>}
-              {turn.completedAt && <span>结束: {new Date(turn.completedAt).toLocaleTimeString([], { hour12: false })}</span>}
+              {turn.startedAt && <span>Start: {new Date(turn.startedAt).toLocaleTimeString([], { hour12: false })}</span>}
+              {turn.completedAt && <span>End: {new Date(turn.completedAt).toLocaleTimeString([], { hour12: false })}</span>}
             </div>
           )}
         </div>
@@ -211,18 +211,18 @@ export function ExecutionReportDialog({ execution, open, onOpenChange }: Executi
             </div>
             <div className="flex-1 min-w-0">
               <DialogTitle className="text-base font-semibold flex items-center gap-2">
-                {execution.teamName || '团队执行'}
+                {execution.teamName || 'Team Execution'}
                 <Badge variant="outline" className={`text-[10px] ${statusCfg.color}`}>
                   <StatusIcon className="h-3 w-3 mr-1" />
                   {statusCfg.label}
                 </Badge>
               </DialogTitle>
               <DialogDescription className="text-xs mt-1">
-                {completedTurns}/{execution.turns.length} 轮次完成
+                {completedTurns}/{execution.turns.length}  turns completed
                 {totalDuration != null && (
                   <>
                     <span className="mx-2 opacity-50">|</span>
-                    耗时 {totalDuration}s
+                    Duration {totalDuration}s
                   </>
                 )}
                 <span className="mx-2 opacity-50">|</span>
@@ -239,7 +239,7 @@ export function ExecutionReportDialog({ execution, open, onOpenChange }: Executi
             <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/30 border border-border/40">
               <Target className="h-4 w-4 text-primary mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">目标</p>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Goal</p>
                 <p className="text-sm text-foreground whitespace-pre-wrap break-words">{execution.goal}</p>
               </div>
             </div>
@@ -248,7 +248,7 @@ export function ExecutionReportDialog({ execution, open, onOpenChange }: Executi
             {reportSource && (
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                  任务报告
+                  Report
                 </p>
                 <div className="border border-border/50 rounded-lg p-4 bg-card max-h-[40vh] overflow-y-auto">
                   <MarkdownContent content={reportSource} />
@@ -261,20 +261,20 @@ export function ExecutionReportDialog({ execution, open, onOpenChange }: Executi
               <div className="flex items-center gap-4 flex-wrap text-xs text-muted-foreground">
                 <div className="flex items-center gap-1.5">
                   <BarChart3 className="h-3.5 w-3.5" />
-                  <span>{execution.metrics.totalTurns} 轮次</span>
+                  <span>{execution.metrics.totalTurns} turns</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5" />
                   <span>{formatDuration(execution.metrics.totalDurationMs)}</span>
                 </div>
                 {execution.metrics.maxDepthReached > 0 && (
-                  <span>最大深度 {execution.metrics.maxDepthReached}</span>
+                  <span>Max depth {execution.metrics.maxDepthReached}</span>
                 )}
                 {execution.metrics.feedbackCycles > 0 && (
-                  <span>{execution.metrics.feedbackCycles} 次反馈</span>
+                  <span>{execution.metrics.feedbackCycles} feedback cycles</span>
                 )}
                 {execution.metrics.avgTurnDurationMs > 0 && (
-                  <span>平均 {formatDuration(execution.metrics.avgTurnDurationMs)}/轮</span>
+                  <span>Avg {formatDuration(execution.metrics.avgTurnDurationMs)}/turn</span>
                 )}
                 {(execution.metrics.tokenUsage.prompt > 0 || execution.metrics.tokenUsage.completion > 0) && (
                   <span>Tokens: {(execution.metrics.tokenUsage.prompt + execution.metrics.tokenUsage.completion).toLocaleString()} ({execution.metrics.tokenUsage.prompt.toLocaleString()} in / {execution.metrics.tokenUsage.completion.toLocaleString()} out)</span>
@@ -287,11 +287,11 @@ export function ExecutionReportDialog({ execution, open, onOpenChange }: Executi
             {/* Turn details */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                执行详情 ({execution.turns.length} 轮)
+                Execution Details ({execution.turns.length} turns)
               </p>
               <div className="space-y-2">
                 {execution.turns.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">暂无执行记录</p>
+                  <p className="text-sm text-muted-foreground text-center py-8">No execution records</p>
                 ) : (
                   execution.turns.map(turn => (
                     <TurnCard
@@ -318,7 +318,7 @@ export function ExecutionReportDialog({ execution, open, onOpenChange }: Executi
             )}
           </div>
           <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => onOpenChange(false)}>
-            关闭
+            Close
           </Button>
         </div>
       </DialogContent>
