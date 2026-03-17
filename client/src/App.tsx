@@ -33,7 +33,12 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 function LoginPage() {
   const { handleGoogleLogin, loading } = useAuth();
   const [error, setError] = useState('');
-  const [processingRedirect, setProcessingRedirect] = useState(false);
+  const [processingRedirect, setProcessingRedirect] = useState(() => {
+    const hash = window.location.hash;
+    if (!hash || hash.length < 2) return false;
+    const params = new URLSearchParams(hash.substring(1));
+    return !!params.get('access_token');
+  });
 
   useEffect(() => {
     const hash = window.location.hash;
@@ -44,7 +49,6 @@ function LoginPage() {
     if (!accessToken) return;
 
     window.history.replaceState(null, '', window.location.pathname);
-    setProcessingRedirect(true);
 
     handleGoogleLogin(accessToken, 'access_token')
       .catch(() => setError('Login failed, please try again'))
