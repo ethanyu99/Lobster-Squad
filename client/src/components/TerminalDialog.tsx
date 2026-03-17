@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Terminal as TerminalIcon, Maximize2, Minimize2 } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
@@ -152,6 +151,7 @@ export function TerminalDialog({ instance, open, onOpenChange }: TerminalDialogP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTitle className="sr-only">{instance.name} Terminal</DialogTitle>
       <DialogContent
         showCloseButton={false}
         className={`p-0 gap-0 overflow-hidden flex flex-col bg-[#0d1117] border-border/60 ${
@@ -159,31 +159,34 @@ export function TerminalDialog({ instance, open, onOpenChange }: TerminalDialogP
         }`}
         style={isMaximized ? { maxWidth: 'none', width: 'calc(100vw - 2rem)', height: 'calc(100vh - 2rem)' } : {}}
       >
-        <DialogHeader className="flex flex-row items-center justify-between px-4 py-2.5 border-b border-border/30 bg-[#161b22] shrink-0">
-          <div className="flex items-center gap-2">
-            <TerminalIcon className="h-4 w-4 text-muted-foreground" />
-            <DialogTitle className="text-sm font-semibold text-foreground/90">
-              {instance.name} — Terminal
-            </DialogTitle>
-            <Badge
-              variant={connected ? 'default' : 'outline'}
-              className={`text-[10px] uppercase tracking-wider font-semibold ml-1 ${
-                connected ? 'bg-emerald-600 hover:bg-emerald-600 text-white border-emerald-600' : 'text-muted-foreground'
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#30363d] bg-[#161b22] shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <TerminalIcon className="h-4 w-4 text-[#8b949e] shrink-0" />
+            <span className="text-[13px] font-medium text-[#e6edf3] truncate">
+              {instance.name}
+            </span>
+            <span className="text-[13px] text-[#8b949e]">—</span>
+            <span className="text-[13px] text-[#8b949e]">Terminal</span>
+            <span
+              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide leading-none shrink-0 ${
+                connected
+                  ? 'bg-[#238636] text-white'
+                  : 'bg-transparent border border-[#30363d] text-[#8b949e]'
               }`}
             >
               {connected ? 'Connected' : 'Connecting…'}
-            </Badge>
+            </span>
           </div>
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 hover:bg-muted/30 text-muted-foreground"
+            className="h-7 w-7 hover:bg-[#30363d] text-[#8b949e] shrink-0"
             onClick={() => setIsMaximized(v => !v)}
             title={isMaximized ? 'Minimize' : 'Maximize'}
           >
             {isMaximized ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
           </Button>
-        </DialogHeader>
+        </div>
 
         {error && (
           <div className="px-4 py-2 bg-destructive/10 border-b border-destructive/20 text-xs text-destructive font-mono">
