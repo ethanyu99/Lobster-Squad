@@ -85,10 +85,10 @@ export function InstanceCard({ instance, onRefresh }: InstanceCardProps) {
     setDeleting(true);
     try {
       await deleteInstance(instance.id);
-      toast.success(`已删除实例 "${instance.name}"`);
+      toast.success(`Instance "${instance.name}" deleted`);
       onRefresh();
     } catch {
-      toast.error('删除实例失败');
+      toast.error('Failed to delete instance');
     } finally {
       setDeleting(false);
     }

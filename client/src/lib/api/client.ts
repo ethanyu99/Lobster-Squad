@@ -57,9 +57,9 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     }
     // Auto-toast for common errors
     if (res.status === 429) {
-      toast.error('请求过于频繁，请稍后重试');
+      toast.error('Too many requests, please try again later');
     } else if (res.status >= 500) {
-      toast.error('服务器错误，请稍后重试');
+      toast.error('Server error, please try again later');
     }
 
     throw new ApiError(errorMessage, res.status, errorCode);

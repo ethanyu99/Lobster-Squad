@@ -101,7 +101,7 @@ export const useWSStore = create<WSState>((set, get) => ({
         useInstanceStore.getState().loadInstances();
         useInstanceStore.getState().loadActiveSessions();
         if (wasConnected === false && get()._reconnectTimer) {
-          toast.success('连接已恢复');
+          toast.success('Connection restored');
         }
       };
 
@@ -109,7 +109,7 @@ export const useWSStore = create<WSState>((set, get) => ({
         const wasConnected = get().connected;
         set({ connected: false });
         if (wasConnected) {
-          toast.error('连接已断开，正在重连…');
+          toast.error('Connection lost, reconnecting…');
         }
         const timer = setTimeout(connect, RECONNECT_DELAY_MS);
         set({ _reconnectTimer: timer });
