@@ -155,9 +155,10 @@ export function TerminalDialog({ instance, open, onOpenChange }: TerminalDialogP
       <DialogContent
         showCloseButton={false}
         className={`p-0 gap-0 overflow-hidden flex flex-col bg-[#0d1117] border-border/60 ${
-          isMaximized ? 'fixed inset-4 max-w-none w-auto h-auto' : 'sm:max-w-4xl h-[600px]'
+          isMaximized
+            ? 'inset-4 max-w-none w-auto h-auto translate-x-0 translate-y-0 top-4 left-4'
+            : 'sm:max-w-4xl h-[600px]'
         }`}
-        style={isMaximized ? { maxWidth: 'none', width: 'calc(100vw - 2rem)', height: 'calc(100vh - 2rem)' } : {}}
       >
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#30363d] bg-[#161b22] shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
