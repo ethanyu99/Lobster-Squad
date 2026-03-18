@@ -30,6 +30,38 @@ function getShareToken(): string | null {
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
+const LOADING_FRAMES = [
+  `  _        _       _              ___                  _
+ | |   ___| |__ __| |_ ___ _ _  / __| __ _ _  _ __ _ __| |
+ | |__/ _ \\ '_ (_-<  _/ -_) '_| \\__ \\/ _\` | || / _\` / _\` |
+ |____\\___/_.__/__/\\__\\___|_|   |___/\\__, |\\_,_\\__,_\\__,_|
+                                        |_|`,
+];
+
+function LoadingScreen() {
+  const [dots, setDots] = useState('');
+  const [cursor, setCursor] = useState(true);
+
+  useEffect(() => {
+    const dotTimer = setInterval(() => setDots(d => d.length >= 3 ? '' : d + '.'), 400);
+    const cursorTimer = setInterval(() => setCursor(c => !c), 530);
+    return () => { clearInterval(dotTimer); clearInterval(cursorTimer); };
+  }, []);
+
+  return (
+    <div className="col-span-full flex flex-col items-center justify-center py-20">
+      <pre className="text-[11px] leading-tight text-muted-foreground/30 font-mono select-none mb-6 transition-opacity duration-500">
+        {LOADING_FRAMES[0]}
+      </pre>
+      <div className="font-mono text-xs text-muted-foreground/60 flex items-center gap-1">
+        <span className="text-primary/60">$</span>
+        <span>loading instances{dots}</span>
+        <span className={`${cursor ? 'opacity-100' : 'opacity-0'} transition-opacity text-primary/60`}>█</span>
+      </div>
+    </div>
+  );
+}
+
 function LoginPage() {
   const { handleGoogleLogin, loading } = useAuth();
   const [error, setError] = useState('');
@@ -163,6 +195,7 @@ function AuthGate() {
 function MainApp() {
   // ── Store subscriptions ──
   const instances = useInstanceStore(s => s.instances);
+  const loaded = useInstanceStore(s => s.loaded);
   const stats = useInstanceStore(s => s.stats);
   const setNotifyCallback = useInstanceStore(s => s.setNotifyCallback);
   const refreshInstances = useInstanceStore(s => s.loadInstances);
@@ -254,7 +287,9 @@ function MainApp() {
           <ScrollArea className="flex-1 min-h-0 px-2">
             {activeTab === 'instances' ? (
               <div className="p-6 pt-2 grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
-                {instances.length === 0 ? (
+                {!loaded ? (
+                  <LoadingScreen />
+                ) : instances.length === 0 ? (
                   <WelcomeGuide onCreated={refreshInstances} />
                 ) : (
                   instances.map(inst => (
