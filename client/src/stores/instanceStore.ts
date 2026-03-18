@@ -12,6 +12,7 @@ interface PendingExchange {
 
 interface InstanceState {
   instances: InstancePublic[];
+  loaded: boolean;
   taskStreams: Record<string, string>;
   stats: InstanceStats;
   activeSessions: Record<string, ActiveSessionInfo>;
@@ -44,6 +45,7 @@ function setInstancesAndStats(instances: InstancePublic[]) {
 
 export const useInstanceStore = create<InstanceState>((set, get) => ({
   instances: [],
+  loaded: false,
   taskStreams: {},
   stats: { total: 0, online: 0, busy: 0, offline: 0 },
   activeSessions: {},
@@ -58,9 +60,10 @@ export const useInstanceStore = create<InstanceState>((set, get) => ({
   loadInstances: async () => {
     try {
       const data = await fetchInstances();
-      set(setInstancesAndStats(data.instances));
+      set({ ...setInstancesAndStats(data.instances), loaded: true });
     } catch (err) {
       console.warn('Failed to load instances:', err);
+      set({ loaded: true });
     }
   },
 
