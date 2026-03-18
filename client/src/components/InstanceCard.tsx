@@ -30,12 +30,6 @@ const statusColor: Record<string, string> = {
   offline: 'bg-zinc-400',
 };
 
-const statusBadgeVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  online: 'secondary',
-  busy: 'default',
-  offline: 'outline',
-};
-
 export function InstanceCard({ instance, onRefresh }: InstanceCardProps) {
   // Subscribe to this instance's stream only (avoids re-render on other instances' streams)
   const taskStream = useInstanceStore(s => s.taskStreams[instance.id]);
@@ -144,9 +138,6 @@ export function InstanceCard({ instance, onRefresh }: InstanceCardProps) {
                   Sandbox
                 </Badge>
               )}
-              <Badge variant={statusBadgeVariant[instance.status]} className="text-[10px] uppercase tracking-wider font-semibold">
-                {instance.status}
-              </Badge>
             </div>
           </div>
           <div className="flex items-center gap-1 mt-1.5 flex-wrap">
@@ -224,16 +215,17 @@ export function InstanceCard({ instance, onRefresh }: InstanceCardProps) {
             </Button>
           </div>
           <div className="flex flex-col gap-1.5 mt-2.5 min-w-0">
-            <div className="font-mono text-xs text-muted-foreground/80 bg-muted/50 px-2 py-1.5 rounded-md border border-border/50 min-w-0 overflow-hidden flex items-center">
-              <span className="truncate select-text">{instance.endpoint || 'No endpoint'}</span>
-            </div>
             {instance.endpoint && instance.token && (
-              <div className="font-mono text-xs text-muted-foreground bg-muted/50 px-2 py-1.5 rounded-md border border-border/50 min-w-0 overflow-hidden flex items-center">
-                <a href={`${instance.endpoint?.replace(/^ws/, 'http') || ''}#token=${instance.token}`} target="_blank" rel="noreferrer" className="hover:text-foreground hover:underline flex items-center gap-1.5 min-w-0 w-full">
-                  <span className="truncate">Web UI: {instance.endpoint}?token={instance.token.substring(0, 8)}...</span>
-                  <ExternalLink className="h-3 w-3 shrink-0" />
-                </a>
-              </div>
+              <a
+                href={`${instance.endpoint.replace(/^ws/, 'http')}#token=${instance.token}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium text-primary hover:text-primary/80 bg-primary/5 hover:bg-primary/10 dark:bg-primary/10 dark:hover:bg-primary/15 border border-primary/20 dark:border-primary/15 transition-colors w-fit"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ExternalLink className="h-3 w-3" />
+                Open Web UI
+              </a>
             )}
             {instance.currentTask?.sessionKey && (
               <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-violet-50/50 dark:bg-violet-950/20 border border-violet-200/50 dark:border-violet-800/30 min-w-0 overflow-hidden">
