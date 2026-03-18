@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Terminal as TerminalIcon, Maximize2, Minimize2 } from 'lucide-react';
+import { Terminal as TerminalIcon, X } from 'lucide-react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -23,7 +23,7 @@ export function TerminalDialog({ instance, open, onOpenChange }: TerminalDialogP
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState('');
-  const [isMaximized, setIsMaximized] = useState(false);
+
 
   const send = useWSStore(s => s.send);
   const addTerminalHandler = useWSStore(s => s.addTerminalHandler);
@@ -132,33 +132,14 @@ export function TerminalDialog({ instance, open, onOpenChange }: TerminalDialogP
     return () => clearTimeout(setupTimeout);
   }, [open, instance.id, send]);
 
-  useEffect(() => {
-    setTimeout(() => {
-      if (fitAddonRef.current && connected) {
-        try {
-          fitAddonRef.current.fit();
-          if (sessionIdRef.current && xtermRef.current) {
-            send({
-              type: 'terminal:resize',
-              payload: { sessionId: sessionIdRef.current, cols: xtermRef.current.cols, rows: xtermRef.current.rows },
-              timestamp: new Date().toISOString(),
-            });
-          }
-        } catch { /* ignore */ }
-      }
-    }, 50);
-  }, [isMaximized, connected, send]);
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTitle className="sr-only">{instance.name} Terminal</DialogTitle>
       <DialogContent
         showCloseButton={false}
-        className={`p-0 gap-0 overflow-hidden flex flex-col bg-[#0d1117] border-border/60 ${
-          isMaximized
-            ? 'inset-4 max-w-none w-auto h-auto translate-x-0 translate-y-0 top-4 left-4'
-            : 'sm:max-w-4xl h-[600px]'
-        }`}
+        className="p-0 gap-0 overflow-hidden flex flex-col bg-[#0d1117] border-border/60 sm:max-w-4xl h-[600px]"
       >
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#30363d] bg-[#161b22] shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -182,10 +163,10 @@ export function TerminalDialog({ instance, open, onOpenChange }: TerminalDialogP
             variant="ghost"
             size="icon"
             className="h-7 w-7 hover:bg-[#30363d] text-[#8b949e] shrink-0"
-            onClick={() => setIsMaximized(v => !v)}
-            title={isMaximized ? 'Minimize' : 'Maximize'}
+            onClick={() => onOpenChange(false)}
+            title="Close"
           >
-            {isMaximized ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            <X className="h-3.5 w-3.5" />
           </Button>
         </div>
 
