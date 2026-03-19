@@ -12,6 +12,7 @@ import { ExecutionPanel } from '@/components/ExecutionPanel';
 import { ExecutionReportDialog } from '@/components/ExecutionReportDialog';
 import { ShareView } from '@/components/ShareView';
 import { WelcomeGuide } from '@/components/WelcomeGuide';
+import { RunningTasksDrawer } from '@/components/RunningTasksDrawer';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotification } from '@/hooks/useNotification';
 import { useInstanceStore } from '@/stores/instanceStore';
@@ -199,6 +200,7 @@ function MainApp() {
   const stats = useInstanceStore(s => s.stats);
   const setNotifyCallback = useInstanceStore(s => s.setNotifyCallback);
   const refreshInstances = useInstanceStore(s => s.loadInstances);
+  const taskStreams = useInstanceStore(s => s.taskStreams);
 
   const executionLogs = useExecutionStore(s => s.executionLogs);
   const executions = useExecutionStore(s => s.executions);
@@ -226,9 +228,12 @@ function MainApp() {
 
   // ── Local UI state ──
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [tasksDrawerOpen, setTasksDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ViewTab>('instances');
   const [selectedAutoExecution, setSelectedAutoExecution] = useState<ExecutionHistory | null>(null);
   const [autoExecDetailOpen, setAutoExecDetailOpen] = useState(false);
+
+
 
   const handleTeamRefresh = () => {
     loadTeams();
@@ -242,6 +247,7 @@ function MainApp() {
         instances={instances}
         connected={connected}
         onHistoryClick={() => setHistoryOpen(true)}
+        onRunningClick={() => setTasksDrawerOpen(true)}
         notifSupported={notifSupported}
         notifEnabled={notifEnabled}
         onToggleNotif={toggleNotif}
@@ -286,7 +292,7 @@ function MainApp() {
           </div>
           <ScrollArea className="flex-1 min-h-0 px-2">
             {activeTab === 'instances' ? (
-              <div className="p-6 pt-2 grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+              <div className="p-4 pt-2 grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {!loaded ? (
                   <LoadingScreen />
                 ) : instances.length === 0 ? (
@@ -322,11 +328,11 @@ function MainApp() {
                           <div className="text-primary font-semibold mb-1">01 <span className="text-foreground">Define</span></div>
                           <div className="text-muted-foreground leading-snug">Create a team with roles: PM, Dev, QA</div>
                         </div>
-                        <div className="bg-card border border-border/60 rounded-lg px-3 py-3 text-left opacity-60">
+                        <div className="bg-card border border-border/60 rounded-lg px-3 py-3 text-left">
                           <div className="text-primary font-semibold mb-1">02 <span className="text-foreground">Bind</span></div>
                           <div className="text-muted-foreground leading-snug">Assign instances to each role</div>
                         </div>
-                        <div className="bg-card border border-border/60 rounded-lg px-3 py-3 text-left opacity-60">
+                        <div className="bg-card border border-border/60 rounded-lg px-3 py-3 text-left">
                           <div className="text-primary font-semibold mb-1">03 <span className="text-foreground">Execute</span></div>
                           <div className="text-muted-foreground leading-snug">Dispatch goals, agents collaborate automatically</div>
                         </div>
@@ -360,7 +366,7 @@ function MainApp() {
         />
       )}
 
-      <TaskInput instances={instances} teams={teams} onDispatch={dispatchTask} onTeamDispatch={dispatchTeamTask} />
+      <TaskInput instances={instances} teams={teams} onDispatch={(...args) => { dispatchTask(...args); setTasksDrawerOpen(true); }} onTeamDispatch={dispatchTeamTask} />
 
       <HistoryDrawer
         open={historyOpen}
@@ -376,6 +382,13 @@ function MainApp() {
         execution={selectedAutoExecution}
         open={autoExecDetailOpen}
         onOpenChange={setAutoExecDetailOpen}
+      />
+
+      <RunningTasksDrawer
+        open={tasksDrawerOpen}
+        onOpenChange={setTasksDrawerOpen}
+        instances={instances}
+        taskStreams={taskStreams}
       />
 
       <Toaster position="bottom-right" richColors closeButton />
