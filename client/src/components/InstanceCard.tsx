@@ -159,11 +159,15 @@ export function InstanceCard({ instance, onRefresh }: InstanceCardProps) {
                   <Upload className="h-3 w-3 text-muted-foreground" />
                 </Button>
               )}
-              {instance.sandboxId && (
+              {instance.terminalUrl ? (
+                <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-muted" onClick={(e) => { e.stopPropagation(); window.open(instance.terminalUrl, '_blank'); }} title="Terminal">
+                  <Terminal className="h-3 w-3 text-muted-foreground" />
+                </Button>
+              ) : instance.sandboxId ? (
                 <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-muted" onClick={(e) => { e.stopPropagation(); setTerminalOpen(true); }} title="Terminal">
                   <Terminal className="h-3 w-3 text-muted-foreground" />
                 </Button>
-              )}
+              ) : null}
               <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-muted" onClick={(e) => { e.stopPropagation(); setConfigOpen(true); }} title="Config">
                 <Settings className="h-3 w-3 text-muted-foreground" />
               </Button>

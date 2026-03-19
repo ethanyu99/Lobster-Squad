@@ -7,7 +7,6 @@ import { dispatchToTeam, cancelExecution } from './team-dispatch';
 import { verifyToken } from './auth';
 import { getRedis, getSubscriber } from './redis';
 import { createTerminal, sendTerminalInput, resizeTerminal, closeTerminal, terminalSessions } from './terminal';
-
 const activeControllers = new Map<string, AbortController>();
 
 interface WSClient {
@@ -688,6 +687,16 @@ export function setupWebSocket(wss: WebSocketServer) {
                     }));
                   }
                 },
+                // onDisconnect callback — notify client that PTY connection dropped
+                () => {
+                  if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                      type: 'terminal:error',
+                      payload: { sessionId, instanceId, error: 'Connection lost' },
+                      timestamp: new Date().toISOString(),
+                    }));
+                  }
+                },
               );
               ws.send(JSON.stringify({
                 type: 'terminal:opened',
@@ -707,7 +716,17 @@ export function setupWebSocket(wss: WebSocketServer) {
             const { sessionId, data } = msg.payload;
             try {
               await sendTerminalInput(sessionId, Buffer.from(data, 'base64'));
-            } catch { /* ignore */ }
+            } catch (err) {
+              // Input failed — connection likely dead, notify client
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  type: 'terminal:error',
+                  payload: { sessionId, error: 'Connection lost' },
+                  timestamp: new Date().toISOString(),
+                }));
+              }
+              await closeTerminal(sessionId);
+            }
           }
 
           if (msg.type === 'terminal:resize') {
@@ -721,6 +740,7 @@ export function setupWebSocket(wss: WebSocketServer) {
             const { sessionId } = msg.payload;
             await closeTerminal(sessionId);
           }
+
         } catch {
           // ignore parse errors
         }

@@ -100,6 +100,7 @@ instanceRouter.post('/sandbox', async (req, res) => {
       token: result.gatewayToken,
       sandboxId: result.sandboxId,
       apiKey,
+      terminalUrl: result.terminalUrl,
     });
     res.write(`data: ${JSON.stringify({ type: 'complete', instance })}\n\n`);
     res.end();
