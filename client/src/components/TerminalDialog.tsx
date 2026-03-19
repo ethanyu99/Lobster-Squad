@@ -94,9 +94,6 @@ export function TerminalDialog({ instance, open, onOpenChange }: TerminalDialogP
       if (xtermRef.current) { xtermRef.current.dispose(); xtermRef.current = null; }
       if (fitAddonRef.current) { fitAddonRef.current = null; }
       if (resizeObserverRef.current) { resizeObserverRef.current.disconnect(); resizeObserverRef.current = null; }
-      setConnected(false);
-      setError('');
-      setReconnecting(false);
       return;
     }
 
@@ -166,6 +163,15 @@ export function TerminalDialog({ instance, open, onOpenChange }: TerminalDialogP
     return () => clearTimeout(setupTimeout);
   }, [open, instance.id, send]);
 
+  const handleOpenChange = (value: boolean) => {
+    if (!value) {
+      setConnected(false);
+      setError('');
+      setReconnecting(false);
+    }
+    onOpenChange(value);
+  };
+
   const handleManualReconnect = () => {
     if (reconnectTimerRef.current) { clearTimeout(reconnectTimerRef.current); reconnectTimerRef.current = null; }
     setReconnecting(true);
@@ -175,7 +181,7 @@ export function TerminalDialog({ instance, open, onOpenChange }: TerminalDialogP
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTitle className="sr-only">{instance.name} Terminal</DialogTitle>
       <DialogContent
         showCloseButton={false}
@@ -217,7 +223,7 @@ export function TerminalDialog({ instance, open, onOpenChange }: TerminalDialogP
               variant="ghost"
               size="icon"
               className="h-7 w-7 hover:bg-[#30363d] text-[#8b949e] shrink-0"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
               title="Close"
             >
               <X className="h-3.5 w-3.5" />
