@@ -52,6 +52,7 @@ export interface Instance {
   description: string;
   status: 'online' | 'offline' | 'busy';
   sandboxId?: string;
+  terminalUrl?: string;
   teamId?: string;
   roleId?: string;
   currentTask?: TaskSummary;

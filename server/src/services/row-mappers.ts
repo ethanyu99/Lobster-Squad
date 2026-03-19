@@ -10,6 +10,7 @@ export function rowToInstance(row: any): Instance {
     apiKey: row.api_key || undefined,
     description: row.description || '',
     sandboxId: row.sandbox_id || undefined,
+    terminalUrl: row.terminal_url || undefined,
     teamId: row.team_id || undefined,
     roleId: row.role_id || undefined,
     status: 'offline',

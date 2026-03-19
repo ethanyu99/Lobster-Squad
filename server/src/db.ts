@@ -168,7 +168,15 @@ async function migrate() {
     );
   `);
 
-  // Step 10: Add topic column to sessions
+  // Step 10: Add terminal_url column to instances
+  await p.query(`
+    DO $$ BEGIN
+      ALTER TABLE instances ADD COLUMN IF NOT EXISTS terminal_url TEXT;
+    EXCEPTION WHEN duplicate_column THEN NULL;
+    END $$;
+  `);
+
+  // Step 11: Add topic column to sessions
   await p.query(`
     DO $$ BEGIN
       ALTER TABLE sessions ADD COLUMN IF NOT EXISTS topic VARCHAR(500);
@@ -176,7 +184,7 @@ async function migrate() {
     END $$;
   `);
 
-  // Step 11: Create indexes (after all columns exist)
+  // Step 12: Create indexes (after all columns exist)
   await p.query(`
     CREATE INDEX IF NOT EXISTS idx_teams_owner_id ON teams(owner_id);
     CREATE INDEX IF NOT EXISTS idx_roles_team_id ON roles(team_id);

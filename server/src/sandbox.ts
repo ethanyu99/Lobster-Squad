@@ -93,6 +93,7 @@ export interface SandboxCreateResult {
   sandboxId: string;
   endpoint: string;
   gatewayToken: string;
+  terminalUrl?: string;
 }
 
 export async function createSandbox(
@@ -173,12 +174,31 @@ export async function createSandbox(
 
     emit({ step: 'starting_daemon', message: 'Starting device auto-approve daemon...' });
 
+    // Install and start ttyd web terminal
+    let terminalUrl: string | undefined;
+    try {
+      await sandbox.commands.run(
+        'curl -sSL -o /usr/local/bin/ttyd https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.x86_64 && chmod +x /usr/local/bin/ttyd',
+        { timeoutMs: 60_000 },
+      );
+      const ttydPassword = crypto.randomBytes(16).toString('base64url');
+      await sandbox.commands.run(
+        `nohup ttyd -p 7681 -W -O -c admin:${ttydPassword} bash > /tmp/ttyd.log 2>&1 &`,
+        { timeoutMs: 30_000 },
+      );
+      const ttydHost = sandbox.getHost(7681);
+      terminalUrl = `https://admin:${ttydPassword}@${ttydHost}`;
+      console.log('[sandbox] ttyd terminal URL generated');
+    } catch (err) {
+      console.warn('[sandbox] Failed to install/start ttyd:', err instanceof Error ? err.message : err);
+    }
+
     const host = sandbox.getHost(GATEWAY_PORT);
     const endpoint = `https://${host}`;
     emit({ step: 'sandbox_ready', message: `Sandbox ready — endpoint: ${endpoint}` });
     console.log('[sandbox] WebUI:', `${endpoint}#token=${gwToken}`);
 
-    return { sandboxId, endpoint, gatewayToken: gwToken };
+    return { sandboxId, endpoint, gatewayToken: gwToken, terminalUrl };
   } catch (err) {
     console.error('[sandbox] Creation failed, cleaning up sandbox', sandboxId);
     try { await sandbox.kill(); } catch { /* ignore */ }

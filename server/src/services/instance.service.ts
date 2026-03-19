@@ -94,7 +94,7 @@ export const instanceService = {
     return toPublic(inst, role);
   },
 
-  async createInstance(ownerId: string, data: Pick<Instance, 'name' | 'endpoint' | 'description'> & { token?: string; sandboxId?: string; apiKey?: string }): Promise<InstancePublic> {
+  async createInstance(ownerId: string, data: Pick<Instance, 'name' | 'endpoint' | 'description'> & { token?: string; sandboxId?: string; apiKey?: string; terminalUrl?: string }): Promise<InstancePublic> {
     const id = uuid();
     const now = new Date().toISOString();
     const instance: Instance = { id, ownerId, ...data, status: 'offline', createdAt: now, updatedAt: now };
@@ -113,7 +113,7 @@ export const instanceService = {
     return rows.length > 0;
   },
 
-  async updateInstance(id: string, data: Partial<Pick<Instance, 'name' | 'endpoint' | 'description' | 'status' | 'currentTask' | 'token' | 'sandboxId' | 'teamId' | 'roleId'>>): Promise<InstancePublic | undefined> {
+  async updateInstance(id: string, data: Partial<Pick<Instance, 'name' | 'endpoint' | 'description' | 'status' | 'currentTask' | 'token' | 'sandboxId' | 'terminalUrl' | 'teamId' | 'roleId'>>): Promise<InstancePublic | undefined> {
     const redis = getRedis();
 
     if (data.status !== undefined) {
@@ -129,7 +129,7 @@ export const instanceService = {
 
     const hasConfigChange = data.name !== undefined || data.endpoint !== undefined
       || data.description !== undefined || data.token !== undefined || data.sandboxId !== undefined
-      || data.teamId !== undefined || data.roleId !== undefined;
+      || data.terminalUrl !== undefined || data.teamId !== undefined || data.roleId !== undefined;
 
     if (hasConfigChange) {
       const inst = await instanceService.getInstanceRaw(id);

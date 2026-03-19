@@ -108,6 +108,7 @@ export async function loadInstances(): Promise<Map<string, Instance>> {
         apiKey: row.api_key || undefined,
         description: row.description || '',
         sandboxId: row.sandbox_id || undefined,
+        terminalUrl: row.terminal_url || undefined,
         teamId: row.team_id || undefined,
         roleId: row.role_id || undefined,
         status: 'offline',
@@ -125,8 +126,8 @@ export async function loadInstances(): Promise<Map<string, Instance>> {
 export async function saveInstance(instance: Instance): Promise<void> {
   const pool = getPool();
   await pool.query(
-    `INSERT INTO instances (id, owner_id, name, endpoint, token, api_key, description, sandbox_id, team_id, role_id, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    `INSERT INTO instances (id, owner_id, name, endpoint, token, api_key, description, sandbox_id, terminal_url, team_id, role_id, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      ON CONFLICT (id) DO UPDATE SET
        name = EXCLUDED.name,
        endpoint = EXCLUDED.endpoint,
@@ -134,6 +135,7 @@ export async function saveInstance(instance: Instance): Promise<void> {
        api_key = EXCLUDED.api_key,
        description = EXCLUDED.description,
        sandbox_id = EXCLUDED.sandbox_id,
+       terminal_url = EXCLUDED.terminal_url,
        team_id = EXCLUDED.team_id,
        role_id = EXCLUDED.role_id,
        updated_at = EXCLUDED.updated_at`,
@@ -146,6 +148,7 @@ export async function saveInstance(instance: Instance): Promise<void> {
       instance.apiKey || null,
       instance.description,
       instance.sandboxId || null,
+      instance.terminalUrl || null,
       instance.teamId || null,
       instance.roleId || null,
       instance.createdAt,
