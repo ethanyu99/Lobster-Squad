@@ -3,7 +3,7 @@ import type { WSMessage, ExecutionConfig } from '@shared/types';
 import { createWebSocket } from '@/lib/api';
 import { useInstanceStore } from './instanceStore';
 import { useExecutionStore } from './executionStore';
-import { toast } from 'sonner';
+
 
 const RECONNECT_DELAY_MS = 3000;
 
@@ -101,16 +101,12 @@ export const useWSStore = create<WSState>((set, get) => ({
         useInstanceStore.getState().loadInstances();
         useInstanceStore.getState().loadActiveSessions();
         if (wasConnected === false && get()._reconnectTimer) {
-          toast.success('Connection restored');
+          // Status reflected in StatusBar indicator — no toast needed
         }
       };
 
       ws.onclose = () => {
-        const wasConnected = get().connected;
         set({ connected: false });
-        if (wasConnected) {
-          toast.error('Connection lost, reconnecting…');
-        }
         const timer = setTimeout(connect, RECONNECT_DELAY_MS);
         set({ _reconnectTimer: timer });
       };

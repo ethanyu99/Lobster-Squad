@@ -391,7 +391,15 @@ function MainApp() {
         taskStreams={taskStreams}
       />
 
-      <Toaster position="bottom-right" richColors closeButton />
+      <Toaster
+        position="bottom-right"
+        closeButton
+        toastOptions={{
+          className: 'font-mono text-xs !rounded-lg !border-border/60 !shadow-lg',
+          style: { fontFamily: 'Menlo, Monaco, "Courier New", monospace', fontSize: '12px' },
+        }}
+        gap={6}
+      />
     </div>
   );
 }
