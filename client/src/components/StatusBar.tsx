@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { History, ChevronDown, Loader2, User, Copy, Check, LogOut, Bell, BellOff } from 'lucide-react';
+import { History, ChevronDown, Loader2, User, Copy, Check, LogOut, Bell, BellOff, Wifi, WifiOff } from 'lucide-react';
 import type { InstancePublic, InstanceStats } from '@shared/types';
 import { getUserId } from '@/lib/user';
 import { useAuth } from '@/hooks/useAuth';
@@ -141,9 +141,14 @@ export function StatusBar({ stats, instances, connected, onHistoryClick, onRunni
               Offline: <span className="text-foreground">{stats.offline}</span>
             </span>
             <span className="text-border">|</span>
-            <span className="flex items-center gap-1.5">
-              <span className={`inline-block w-2 h-2 rounded-full ${connected ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse'}`} />
-              {connected ? 'Connected' : 'Disconnected'}
+            <span className={`flex items-center gap-1 font-mono ${connected ? 'text-muted-foreground' : 'text-red-500 dark:text-red-400'}`}>
+              {connected
+                ? <Wifi className="h-3 w-3" />
+                : <WifiOff className="h-3 w-3 animate-pulse" />
+              }
+              <span className="text-[10px] uppercase tracking-widest font-bold">
+                {connected ? 'Live' : 'Offline'}
+              </span>
             </span>
           </div>
         </div>
