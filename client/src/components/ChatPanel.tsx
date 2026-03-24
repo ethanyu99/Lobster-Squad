@@ -59,7 +59,7 @@ function InstanceStream({ instance, stream }: { instance: InstancePublic; stream
       {/* Task content */}
       {task?.content && (
         <div className="px-3 py-1.5 border-b border-border/20 dark:border-border/10 bg-muted/10 dark:bg-muted/5 shrink-0">
-          <p className="text-[11px] text-foreground/70 font-mono truncate">
+          <p className="text-xs text-foreground/80 font-mono truncate">
             <span className="text-muted-foreground/50 mr-1">$</span>
             {task.content}
           </p>
@@ -72,24 +72,24 @@ function InstanceStream({ instance, stream }: { instance: InstancePublic; stream
         className="flex-1 min-h-0 overflow-y-auto bg-[#0d1117] dark:bg-[#010409] p-2.5"
       >
         {stream ? (
-          <pre className="text-emerald-400 font-mono text-[11px] leading-[1.6] whitespace-pre-wrap break-words">
+          <pre className="text-emerald-300 font-mono text-xs leading-relaxed whitespace-pre-wrap break-words">
             {stream.slice(-3000)}
           </pre>
         ) : isRunning ? (
-          <div className="flex items-center gap-1.5 text-muted-foreground/40 text-[11px] font-mono py-2">
+          <div className="flex items-center gap-1.5 text-zinc-500 text-xs font-mono py-2">
             <Loader2 className="h-3 w-3 animate-spin" />
             Waiting for output...
           </div>
         ) : (
-          <div className="text-muted-foreground/30 text-[11px] font-mono py-2">
+          <div className="text-zinc-400 text-xs font-mono py-2 leading-relaxed">
             {task?.summary || 'No output'}
           </div>
         )}
 
         {/* Summary after stream */}
         {task?.summary && stream && (
-          <div className="mt-2 pt-2 border-t border-[#30363d] text-[11px] text-muted-foreground/60 font-mono">
-            <span className="text-muted-foreground/40">// </span>
+          <div className="mt-2 pt-2 border-t border-[#30363d] text-xs text-zinc-400 font-mono leading-relaxed">
+            <span className="text-zinc-600">// </span>
             {task.summary}
           </div>
         )}
