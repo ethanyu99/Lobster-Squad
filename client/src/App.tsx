@@ -372,8 +372,8 @@ function MainApp() {
 
       {/* Inline chat panel — above TaskInput */}
       {chatInstances.length > 0 && (
-        <div className="border-t border-border/40 bg-card/80 px-6 py-3">
-          <ChatPanel instances={chatInstances} taskStreams={taskStreams} />
+        <div className="border-t border-border/40 bg-card/80 px-6 py-3 shrink-0" style={{ maxHeight: 'clamp(220px, 35vh, 420px)' }}>
+          <ChatPanel instances={chatInstances} taskStreams={taskStreams} onClose={() => setChatTargetIds([])} />
         </div>
       )}
 
